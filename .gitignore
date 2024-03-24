@@ -1,0 +1,14 @@
+*.bc
+*.s 
+*.so
+*.out
+*.hipi 
+*.hipfb 
+*.out 
+*.o 
+*.out.resolution.txt 
+*.bc 
+*.s 
+*.ll
+*.sh
+build
