@@ -18,7 +18,7 @@ struct InjectAMDGCNFunc : public PassInfoMixin<InjectAMDGCNFunc> {
   }
   bool runOnModule(llvm::Module &M);
   // isRequired being set to true keeps this pass from being skipped
-  // if it has the optnone LLVM attribute
+  // if the function has the optnone LLVM attribute
   static bool isRequired() { return true; }
 };
 
