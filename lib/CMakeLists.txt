@@ -1,9 +1,14 @@
 set(AMDGCN_INSTRUMENTATION_PASSES
 	  InjectAMDGCNFunction
+    InjectAMDGCNInlineASM
     )
 
 set(InjectAMDGCNFunction_SOURCES
   InjectAMDGCNFunction.cpp)
+
+set(InjectAMDGCNInlineASM_SOURCES
+  InjectAMDGCNInlineASM.cpp)  
+
 
 foreach( plugin ${AMDGCN_INSTRUMENTATION_PASSES} )
     add_library(
