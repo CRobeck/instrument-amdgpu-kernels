@@ -7,6 +7,8 @@ A list of the currently implemented instrumentation passes is below. The list is
 ### Implemented Instrumentation Passes
 [Device Function Kernel Injection](#example-1-transformation-pass-to-inject-a-device-function-into-an-amdgpu-kernel) - Transformation pass that inserts (injects) a device function into an existing HIP GPU kernel.
 
+[Read Register Contents With Inline ASM Injection](#example-2-transformation-pass-to-inject-reading-register-contents-into-an-amdgpu-kernel) - Transformation pass that inserts (injects) an Inline ASM function that reads the value in the vector register VGPR V0, makes a new integer variable, places the register contents in to the new variable, and injects it into an existing HIP GPU kernel.
+
 # Getting Started
 
 ## Build LLVM
@@ -140,3 +142,36 @@ Result (should be 1.0): 1.000000
 </tr>
 </table>
 
+# Example 2: Transformation Pass To Inject Reading Register Contents Into An AMDGPU Kernel
+We again take the following AMDGPU kernel which adds two vectors
+```C++
+__global__ void vecAdd(double *a, double *b, double *c, int n)
+{
+    int id = blockIdx.x*blockDim.x+threadIdx.x;
+    if (id < n)
+        c[id] = a[id] + b[id];
+}
+```
+We again would like to insert a device function that prints the kernel name and threadIdx.x. However, in this case we are going to instead read the thread index directly from the vector register (VGPR0) that holds it. The equivalent C++ would be
+```C++
+__global__ void vecAdd(double *a, double *b, double *c, int n)
+{
+    int threadIdx_x;
+    __asm__ __volatile__("v_mov_b32 %0 v0\n" : "=v"(threadIdx_x)); //v0 holds threadIdx.x
+    PrintKernel(threadIdx_x);
+    int id = blockIdx.x*blockDim.x+threadIdx.x;
+    if (id < n)
+        c[id] = a[id] + b[id];
+}
+```
+The steps to do this, with the Rocm/HIP toolchain, are the same as the previous example just using the InjectAMDGCNInlineASM pass instead.
+
+### Build the instrumented version using hipcc and rdc
+```bash
+hipcc -c -fgpu-rdc -fpass-plugin=$PWD/build/lib/libInjectAMDGCNInlineASM.so \
+$PWD/InjectAMDGCNInlineASM/vectorAdd.cpp -o vectorAdd.o
+hipcc -c -fgpu-rdc $PWD/InjectAMDGCNInlineASM/InjectionFunction.cpp -o InjectionFunction.o
+hipcc -fgpu-rdc InjectionFunction.o vectorAdd.o -o instrumented
+```
+
+We notice identical output from the previous example however the in this case a call to inject Inline ASM would show up in the dissassembled ISA.
