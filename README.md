@@ -174,4 +174,4 @@ hipcc -c -fgpu-rdc $PWD/InjectAMDGCNInlineASM/InjectionFunction.cpp -o Injection
 hipcc -fgpu-rdc InjectionFunction.o vectorAdd.o -o instrumented
 ```
 
-We notice identical output from the previous example however the in this case a call to inject Inline ASM would show up in the dissassembled ISA.
+We notice identical output from the previous example however in this case a call to the injected Inline ASM would show up in the dissassembled ISA.
