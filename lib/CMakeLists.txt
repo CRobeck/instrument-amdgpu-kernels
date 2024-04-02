@@ -1,6 +1,7 @@
 set(AMDGCN_INSTRUMENTATION_PASSES
 	  InjectAMDGCNFunction
     InjectAMDGCNInlineASM
+    DumpAMDGCNRegisters
     )
 
 set(InjectAMDGCNFunction_SOURCES
@@ -8,6 +9,9 @@ set(InjectAMDGCNFunction_SOURCES
 
 set(InjectAMDGCNInlineASM_SOURCES
   InjectAMDGCNInlineASM.cpp)  
+
+set(DumpAMDGCNRegisters_SOURCES
+    DumpAMDGCNRegisters.cpp)
 
 
 foreach( plugin ${AMDGCN_INSTRUMENTATION_PASSES} )
