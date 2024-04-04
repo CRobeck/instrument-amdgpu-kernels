@@ -9,7 +9,7 @@ A list of the currently implemented instrumentation passes is below. The list is
 
 [Read Register Contents With Inline ASM Injection](#example-2-transformation-pass-to-inject-reading-register-contents-into-an-amdgpu-kernel) - Transformation pass that inserts (injects) an Inline ASM function that reads the value in the vector register VGPR V0, makes a new integer variable, places the register contents in to the new variable, and injects it into an existing HIP GPU kernel.
 
-[Instrument LDS Reads and Writes With Thread Trace Instructions to Detect Bank Conflicts](#example-3-instrument-lds-eads-and-writes-with-thread-trace-instructions-to-detect-bank-conflicts) - Transformation pass that inserts (injects) an Inline ASM function to emit s_ttracedata instruction prior to each LDS load or store instruction, sets M0 to a unique integer for each of the s_ttracedata instructions, and resets M0 to its default value after the s_ttracedata instruction it into an existing HIP GPU kernel. Nops are inserted as needed. 
+[Instrument LDS Reads and Writes With Thread Trace Instructions to Detect Bank Conflicts](#example-3-instrument-lds-reads-and-writes-with-thread-trace-instructions-to-detect-bank-conflicts) - Transformation pass that inserts (injects) an Inline ASM function to emit s_ttracedata instruction prior to each LDS load or store instruction, sets M0 to a unique integer for each of the s_ttracedata instructions, and resets M0 to its default value after the s_ttracedata instruction it into an existing HIP GPU kernel. Nops are inserted as needed. 
 
 # Getting Started
 Assuming you have a system with Rocm installed  set the correct paths and environment variables. An example module file would be:
