@@ -5,18 +5,16 @@
 #include <iostream>
 #include <string>
 
-#define SHARED_SIZE 2
+#define SHARED_SIZE 32
 
-//__device__ uint32_t ttrace_counter = 0;
 __global__ void kernel(int offset)
 {
  int out;
-// __asm__ __volatile__("s_add_i32 %1 %1 1\n"\
-//                       : "=s"(out) : "s" (ttrace_counter));
     __shared__ uint32_t sharedMem[SHARED_SIZE];
 
-    if (threadIdx.x == 0)
+    if (threadIdx.x == 0){
         for (int i = 0; i < SHARED_SIZE; i++) sharedMem[i] = 0;
+    }
     __syncthreads();
 
     // repeatedly read and write to shared memory

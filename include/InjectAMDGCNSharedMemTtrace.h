@@ -9,7 +9,7 @@ using namespace llvm;
 
 namespace {
 
-struct DumpAMDGCNRegisters : public PassInfoMixin<DumpAMDGCNRegisters> {
+struct InjectAMDGCNSharedMemTtrace : public PassInfoMixin<InjectAMDGCNSharedMemTtrace> {
   PreservedAnalyses run(Module &M, ModuleAnalysisManager &) {
     bool Changed = runOnModule(M);
 

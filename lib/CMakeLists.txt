@@ -1,7 +1,7 @@
 set(AMDGCN_INSTRUMENTATION_PASSES
 	  InjectAMDGCNFunction
     InjectAMDGCNInlineASM
-    DumpAMDGCNRegisters
+    InjectAMDGCNSharedMemTtrace
     )
 
 set(InjectAMDGCNFunction_SOURCES
@@ -10,8 +10,8 @@ set(InjectAMDGCNFunction_SOURCES
 set(InjectAMDGCNInlineASM_SOURCES
   InjectAMDGCNInlineASM.cpp)  
 
-set(DumpAMDGCNRegisters_SOURCES
-    DumpAMDGCNRegisters.cpp)
+set(InjectAMDGCNSharedMemTtrace_SOURCES
+    InjectAMDGCNSharedMemTtrace.cpp)
 
 
 foreach( plugin ${AMDGCN_INSTRUMENTATION_PASSES} )
