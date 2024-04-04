@@ -9,25 +9,27 @@ A list of the currently implemented instrumentation passes is below. The list is
 
 [Read Register Contents With Inline ASM Injection](#example-2-transformation-pass-to-inject-reading-register-contents-into-an-amdgpu-kernel) - Transformation pass that inserts (injects) an Inline ASM function that reads the value in the vector register VGPR V0, makes a new integer variable, places the register contents in to the new variable, and injects it into an existing HIP GPU kernel.
 
-# Getting Started
+[Instrument LDS Reads and Writes With Thread Trace Instructions to Detect Bank Conflict](#example-3--nstrument-lds-eads-and-writes-with-thread-trace-instructions-to-detect-bank-conflict) - Transformation pass that inserts (injects) an Inline ASM function to emit s_ttracedata instruction prior to each LDS load or store instruction, sets M0 to a unique integer for each of the s_ttracedata instructions, and resets M0 to its default value after the s_ttracedata instruction it into an existing HIP GPU kernel. Nops are inserted as needed. 
 
-## Build LLVM
-```bash
-cd $HOME
-git clone https://github.com/llvm/llvm-project.git
-cd llvm-project
-mkdir build
-cd build
-cmake -GNinja -DLLVM_ENABLE_PROJECTS='llvm;clang;lld' \
--DLLVM_TARGETS_TO_BUILD='X86;AMDGPU' \
--DCMAKE_C_COMPILER=clang \
--DCMAKE_CXX_COMPILER=clang++ \
--DCMAKE_BUILD_TYPE=RelWithDebInfo \
--DLLVM_ENABLE_ASSERTIONS=ON \
--DCMAKE_INSTALL_PREFIX=$HOME/llvm-project/build \
-../llvm
-cmake --build .
+# Getting Started
+Assuming you have a system with Rocm installed  set the correct paths and environment variables. An example module file would be:
+
 ```
+module-whatis   rocm
+prepend-path    PATH /opt/rocm/bin:/opt/rocm/llvm/bin
+prepend-path    CMAKE_PREFIX_PATH /opt/rocm
+prepend-path    LIBRARY_PATH /opt/rocm/lib:/opt/rocm/hip/lib:/opt/rocm/hsa/lib:/opt/rocm/lib64:/opt/rocm/opencl/lib:/opt/rocm/opencl/lib/x86_64:/opt/rocm/llvm/lib
+prepend-path    LD_LIBRARY_PATH /opt/rocm/lib:/opt/rocm/hip/lib:/opt/rocm/hsa/lib:/opt/rocm/lib64:/opt/rocm/opencl/lib:/opt/rocm/opencl/lib/x86_64:/opt/rocm/llvm/lib
+prepend-path    LD_RUN_PATH /opt/rocm/lib:/opt/rocm/hip/lib:/opt/rocm/hsa/lib:/opt/rocm/lib64:/opt/rocm/opencl/lib:/opt/rocm/opencl/lib/x86_64:/opt/rocm/llvm/lib
+prepend-path    PKG_CONFIG_PATH /opt/rocm/lib/pkgconfig
+prepend-path    MANPATH /opt/rocm/share/man
+prepend-path    CPATH /opt/rocm/include:/opt/rocm/include/hip:/opt/rocm/hsa/include:/opt/rocm/llvm/include
+setenv          ROCM_PATH /opt/rocm
+setenv          HIP_PATH /opt/rocm
+setenv          ROCM_LLVM /opt/rocm/llvm
+setenv          DEVICE_LIB_PATH /opt/rocm/amdgcn/bitcode
+```
+
 # Example 1: Transformation Pass To Inject a Device Function Into An AMDGPU Kernel
 
 ## Overview
@@ -175,3 +177,19 @@ hipcc -fgpu-rdc InjectionFunction.o vectorAdd.o -o instrumented
 ```
 
 We notice identical output from the previous example however in this case a call to the injected Inline ASM would show up in the dissassembled ISA.
+
+# Example 3: Instrument LDS Reads and Writes With Thread Trace Instructions to Detect Bank Conflict
+### Build the instrumented version using hipcc and rdc
+```bash
+hipcc -c -fgpu-rdc -fpass-plugin=$PWD/build/lib/libInjectAMDGCNSharedMemTtrace.so \
+$PWD/InjectAMDGCNSharedMemTtrace/readWriteBC.cpp -o readWriteBC.o
+hipcc -fgpu-rdc readWriteBC.o -o instrumented
+```
+
+### Inspecting The Instrumented ISA
+```bash
+hipcc -ggdb --save-temps -c -fgpu-rdc -fpass-plugin=$PWD/build/lib/libInjectAMDGCNSharedMemTtrace.so \
+$PWD/InjectAMDGCNSharedMemTtrace/readWriteBC.cpp -o readWriteBC.o
+hipcc --save-temps -fgpu-rdc readWriteBC.o -o instrumented
+llvm-objdump -d a.out-hip-amdgcn-amd-amdhsa-gfx90a > instrumented-amdgcn-isa.log
+```bash
