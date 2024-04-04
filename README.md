@@ -178,7 +178,7 @@ hipcc -fgpu-rdc InjectionFunction.o vectorAdd.o -o instrumented
 
 We notice identical output from the previous example however in this case a call to the injected Inline ASM would show up in the dissassembled ISA.
 
-# Example 3: Instrument LDS Reads and Writes With Thread Trace Instructions to Detect Bank Conflict
+# Example 3: Instrument LDS Reads and Writes With Thread Trace Instructions to Detect Bank Conflicts
 ### Build the instrumented version using hipcc and rdc
 ```bash
 hipcc -c -fgpu-rdc -fpass-plugin=$PWD/build/lib/libInjectAMDGCNSharedMemTtrace.so \
