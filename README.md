@@ -203,6 +203,9 @@ __asm__ __volatile__("s_mov_b32 $0 m0\n" //save the existing value in M0
 ```
 ttrace_counter is an global integer value injected and handled entirely by the pass.
 
+Looking at the instrumented-amdgcn-isa.log file we can see the desired ASM instructions inserted correctly, before each ds_read and ds_write instruction, in the ISA.
+
+<!---
 A unique identifying index of each s_ttracedata instruction will be printed along with its corresponding source file and line number
 
 ```bash
@@ -220,3 +223,4 @@ A unique identifying index of each s_ttracedata instruction will be printed alon
 The compiler has chosen to unroll the loops in the kernel. Therefore, in this case, multiple s_ttracedata will be associated with the same source code line, but a different loop index. 
 
 Looking at the instrumented-amdgcn-isa.log file we can see the desired ASM instructions inserted correctly, before each ds_read and ds_write instruction, in the ISA. Additionally, the total number of s_ttracedata matches the number of indexes output from the pass.
+ -->
