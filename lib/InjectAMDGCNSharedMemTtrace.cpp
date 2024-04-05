@@ -13,7 +13,6 @@ using namespace llvm;
 bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
   bool ModifiedCodeGen = false;
   auto &CTX = M.getContext();
-  bool DebugInfoWarningPrinted = false;
   IRBuilder<> ModuleBuilder(CTX);
   //This is the actual variable value that gets inserted in the Inline ASM
   Value* TtraceCounter = ModuleBuilder.getInt32(0);
@@ -22,25 +21,14 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
   unsigned CounterInt = 0;
   for (auto &F : M) {
     if (F.getCallingConv() == CallingConv::AMDGPU_KERNEL) {
-
         for(Function::iterator BB = F.begin();BB!=F.end();BB++){
           for(BasicBlock::iterator I = BB->begin();I!=BB->end();I++){
 		  	//Shared memory reads
 			if (auto LI = dyn_cast<LoadInst>(I)){
-        		Value *Op = LI->getPointerOperand()->stripPointerCasts();
+        GetElementPtrInst *GEPInst = dyn_cast<GetElementPtrInst>(LI->getPointerOperand());
+        Value *Op = GEPInst->getPointerOperand()->stripPointerCasts();
 				unsigned AddrSpace = cast<PointerType>(Op->getType())->getAddressSpace();
         if (AddrSpace == 3){
-					if (DILocation *DL = dyn_cast<Instruction>(I)->getDebugLoc()) { 
-    				  std::string SourceInfo = (F.getName() + " " + DL->getFilename() + ":" + Twine(DL->getLine()) + ":" +
-    				         Twine(DL->getColumn())).str();
-					  errs() << CounterInt << " " << SourceInfo  << "\n";
-					}
-			else{
-				if(!DebugInfoWarningPrinted){
-					errs() << "warning: no debug info found, did you forget to add -ggdb?\n";
-					DebugInfoWarningPrinted = true;
-				}
-			}
             FunctionType *FTy = FunctionType::get(Type::getInt32Ty(CTX), true);
             std::string AsmString = "s_mov_b32 $0 m0\n""s_mov_b32 m0 $1""\n""s_nop 0\n""s_ttracedata\n""s_mov_b32 m0 $0\n""s_add_i32 $1 $1 1\n";
             IRBuilder<> Builder(LI);
@@ -56,20 +44,10 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
             }
 			//Shared memory writes
 			if (auto SI = dyn_cast<StoreInst>(I)){
-			Value *Op = SI->getPointerOperand()->stripPointerCasts();
-			unsigned AddrSpace = cast<PointerType>(Op->getType())->getAddressSpace();
-			if (AddrSpace == 3){
-					if (DILocation *DL = dyn_cast<Instruction>(I)->getDebugLoc()) { 
-    				  std::string SourceInfo = (F.getName() + " " + DL->getFilename() + ":" + Twine(DL->getLine()) + ":" +
-    				         Twine(DL->getColumn())).str();
-					  errs() << CounterInt << " " << SourceInfo  << "\n";
-					}		
-			else{
-				if(!DebugInfoWarningPrinted){
-					errs() << "warning: no debug info found, did you forget to add -ggdb?\n";
-					DebugInfoWarningPrinted = true;
-				}
-			}
+        GetElementPtrInst *GEPInst = dyn_cast<GetElementPtrInst>(SI->getPointerOperand());
+        Value *Op = GEPInst->getPointerOperand()->stripPointerCasts();
+				unsigned AddrSpace = cast<PointerType>(Op->getType())->getAddressSpace();
+        if (AddrSpace == 3){
             FunctionType *FTy = FunctionType::get(Type::getInt32Ty(CTX), true);
             std::string AsmString = "s_mov_b32 $0 m0\n""s_mov_b32 m0 $1""\n""s_nop 0\n""s_ttracedata\n""s_mov_b32 m0 $0\n""s_add_i32 $1 $1 1\n";
             IRBuilder<> Builder(SI);
@@ -83,16 +61,16 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
                                                    "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n", "", false), {});      
         }
             }
-//
-//
+
+
         }
     } //End of instructions in AMDGCN kernel loop
-//
+
     errs() << "Injected LDS Load/Store s_ttrace instructions at " << CounterInt <<
                " source locations\n"; 
        
 
-//      ModifiedCodeGen = true;
+      ModifiedCodeGen = true;
     } //End of if AMDGCN Kernel
   } //End of functions in module loop
   return ModifiedCodeGen;
@@ -100,7 +78,7 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
 
 PassPluginLibraryInfo getPassPluginInfo() {
   const auto callback = [](PassBuilder &PB) {
-    PB.registerOptimizerLastEPCallback(
+    PB.registerPipelineEarlySimplificationEPCallback(
         [&](ModulePassManager &MPM, auto) {
           MPM.addPass(InjectAMDGCNSharedMemTtrace());
           return true;
