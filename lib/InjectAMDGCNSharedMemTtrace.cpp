@@ -18,7 +18,7 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
   Value* TtraceCounter = ModuleBuilder.getInt32(0);
   //This is the internal counter in the compiler pass. These two will not match currently b/c
   //unrolled loops will copy/inline the InlineASM version not the internal compiler counter.
-  unsigned CounterInt = 0
+  unsigned CounterInt = 0;
   for (auto &F : M) {
     if (F.getCallingConv() == CallingConv::AMDGPU_KERNEL) {
         for(Function::iterator BB = F.begin();BB!=F.end();BB++){
@@ -53,7 +53,7 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
             IRBuilder<> Builder(SI);
             InlineAsm* InlineAsmFunc = InlineAsm::get(FTy, AsmString, "=s,s", true);
             Builder.CreateCall(InlineAsmFunc, {TtraceCounter});
-            UniqueInt++;
+            CounterInt++;
             I++;
             Builder.SetInsertPoint(dyn_cast<Instruction>(I));
             Builder.CreateCall(InlineAsm::get(FTy, "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"\
