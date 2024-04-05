@@ -43,7 +43,6 @@ cmake --build .
 
 # Example 1: Transformation Pass To Inject a Device Function Into An AMDGPU Kernel
 
-## Overview
 Take the following AMDGPU kernel which adds two vectors
 ```C++
 __global__ void vecAdd(double *a, double *b, double *c, int n)
@@ -147,6 +146,7 @@ Result (should be 1.0): 1.000000
 </table>
 
 # Example 2: Transformation Pass To Inject Reading Register Contents Into An AMDGPU Kernel
+
 We again take the following AMDGPU kernel which adds two vectors
 ```C++
 __global__ void vecAdd(double *a, double *b, double *c, int n)
@@ -181,6 +181,7 @@ hipcc -fgpu-rdc InjectionFunction.o vectorAdd.o -o instrumented
 We notice identical output from the previous example however in this case a call to the injected Inline ASM would show up in the dissassembled ISA.
 
 # Example 3: Instrument LDS Reads and Writes With Thread Trace Instructions to Detect Bank Conflicts
+
 ### Build the instrumented version using hipcc and rdc
 ```bash
 hipcc -ggdb --save-temps -c -fgpu-rdc -ggdb -fpass-plugin=$PWD/build/lib/libInjectAMDGCNSharedMemTtrace.so \
