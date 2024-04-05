@@ -14,12 +14,16 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
   bool ModifiedCodeGen = false;
   auto &CTX = M.getContext();
   IRBuilder<> ModuleBuilder(CTX);
+  //This is the actual variable value that gets inserted in the Inline ASM
   Value* TtraceCounter = ModuleBuilder.getInt32(0);
-  unsigned UniqueInt = 0;
+  //This is the internal counter in the compiler pass. These two will not match currently b/c
+  //unrolled loops will copy/inline the InlineASM version not the internal compiler counter.
+  unsigned CounterInt = 0
   for (auto &F : M) {
     if (F.getCallingConv() == CallingConv::AMDGPU_KERNEL) {
         for(Function::iterator BB = F.begin();BB!=F.end();BB++){
-          for(BasicBlock::iterator I = BB->begin();I!=BB->end();I++){  
+          for(BasicBlock::iterator I = BB->begin();I!=BB->end();I++){
+		  	//Shared memory reads
 			if (auto LI = dyn_cast<LoadInst>(I)){
         GetElementPtrInst *GEPInst = dyn_cast<GetElementPtrInst>(LI->getPointerOperand());
         Value *Op = GEPInst->getPointerOperand()->stripPointerCasts();
@@ -30,7 +34,7 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
             IRBuilder<> Builder(LI);
             InlineAsm* InlineAsmFunc = InlineAsm::get(FTy, AsmString, "=s,s", true);
             Builder.CreateCall(InlineAsmFunc, {TtraceCounter});
-            UniqueInt++;
+            CounterInt++;
             I++;
             Builder.SetInsertPoint(dyn_cast<Instruction>(I));
             Builder.CreateCall(InlineAsm::get(FTy, "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"\
@@ -38,7 +42,7 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
                                                    "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n", "", false), {});      
         }
             }
-
+			//Shared memory writes
 			if (auto SI = dyn_cast<StoreInst>(I)){
         GetElementPtrInst *GEPInst = dyn_cast<GetElementPtrInst>(SI->getPointerOperand());
         Value *Op = GEPInst->getPointerOperand()->stripPointerCasts();
@@ -62,7 +66,7 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
         }
     } //End of instructions in AMDGCN kernel loop
 
-    errs() << "Injected LDS Load/Store s_ttrace instructions at " << UniqueInt <<
+    errs() << "Injected LDS Load/Store s_ttrace instructions at " << CounterInt <<
                " source locations\n"; 
        
 
