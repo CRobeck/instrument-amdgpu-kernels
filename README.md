@@ -217,6 +217,6 @@ A unique identifying index of each s_ttracedata instruction will be printed alon
 8 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:24:26
 9 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:24:26
 ```
-The compiler has choosen to unrolled the loops in the kernel. Therefore, in this case, multiple s_ttracedata will be associated with the same source code line, but a different loop index. 
+The compiler has chosen to unroll the loops in the kernel. Therefore, in this case, multiple s_ttracedata will be associated with the same source code line, but a different loop index. 
 
-Looking at the instrumented-amdgcn-isa.log file we can see the desire ASM instructions inserted correctly, before each ds_read and ds_write instruction, in the ISA. And, that the total number of s_ttracedata matches the number of indexes output from the pass.
+Looking at the instrumented-amdgcn-isa.log file we can see the desired ASM instructions inserted correctly, before each ds_read and ds_write instruction, in the ISA. Additionally, the total number of s_ttracedata matches the number of indexes output from the pass.
