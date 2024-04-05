@@ -197,6 +197,8 @@ __asm__ __volatile__("s_mov_b32 $0 m0\n" //save the existing value in M0
                      ""s_add_i32 $1 $1 1\n //Increment the s_ttracedata instruction counter
                       : "=s"(out) : "s" (ttrace_counter));
 ```
+ttrace_counter is an global integer value injected and handled entirely by the pass.
+
 ### Build the instrumented version using hipcc and rdc
 ```bash
 hipcc -ggdb --save-temps -c -fgpu-rdc -fpass-plugin=$PWD/build/lib/libInjectAMDGCNSharedMemTtrace.so \
