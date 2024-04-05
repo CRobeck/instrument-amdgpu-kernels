@@ -201,9 +201,24 @@ ttrace_counter is an global integer value injected and handled entirely by the p
 
 ### Build the instrumented version using hipcc and rdc
 ```bash
-hipcc -ggdb --save-temps -c -fgpu-rdc -fpass-plugin=$PWD/build/lib/libInjectAMDGCNSharedMemTtrace.so \
+hipcc -ggdb --save-temps -c -fgpu-rdc -ggdb -fpass-plugin=$PWD/build/lib/libInjectAMDGCNSharedMemTtrace.so \
 $PWD/InjectAMDGCNSharedMemTtrace/readWriteBC.cpp -o readWriteBC.o
 hipcc --save-temps -fgpu-rdc readWriteBC.o -o instrumented
 llvm-objdump -d a.out-hip-amdgcn-amd-amdhsa-gfx90a > instrumented-amdgcn-isa.log
 ```
-Looking at the instrumented-amdgcn-isa.log file we can see the desire ASM instructions inserted correctly, before each ds_read and ds_write instruction, in the ISA.
+The unique identifying index of each s_ttracedata instruction will be printed along with its corresponding source file and line number
+```bash
+0 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:16:51
+1 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:16:51
+2 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:16:51
+3 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:16:51
+4 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:16:51
+5 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:16:51
+6 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:16:51
+7 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:16:51
+8 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:24:26
+9 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:24:26
+```
+The compiler has choosen to unrolled the loops. Therefore, in this case, multiple s_ttracedata will be associated with the same source code line, but a different loop index. 
+
+Looking at the instrumented-amdgcn-isa.log file we can see the desire ASM instructions inserted correctly, before each ds_read and ds_write instruction, in the ISA. And, that the total number of s_ttracedata matches the number of indexes output from the pass.
