@@ -30,6 +30,17 @@ setenv          ROCM_LLVM /opt/rocm/llvm
 setenv          DEVICE_LIB_PATH /opt/rocm/amdgcn/bitcode
 ```
 
+### Build the AMDGPU Instrumentation LLVM Passes
+```bash
+git clone https://github.com/CRobeck/instrument-amdgpu-kernels.git
+cd instrument-amdgpu-kernels
+mkdir build
+cd build
+cmake -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+-DLLVM_INSTALL_DIR=$HOME/llvm-project/build ..
+cmake --build .
+```
+
 # Example 1: Transformation Pass To Inject a Device Function Into An AMDGPU Kernel
 
 ## Overview
@@ -61,16 +72,7 @@ __global__ void vecAdd(double *a, double *b, double *c, int n)
 }
 ```
 The steps to do this, with the Rocm/HIP toolchain, are outlined below.
-### Build the InjectAMDGPUFuncCall LLVM Pass
-```bash
-git clone https://github.com/CRobeck/InstrumentAMDGPUKernels.git
-cd InstrumentAMDGPUKernels
-mkdir build
-cd build
-cmake -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
--DLLVM_INSTALL_DIR=$HOME/llvm-project/build ..
-cmake --build .
-```
+
 ### Build the baseline, uninstrumented, version
 ```bash
 hipcc $PWD/InjectAMDGCNFunction/vectorAdd.cpp -o vectorAdd
@@ -181,9 +183,10 @@ We notice identical output from the previous example however in this case a call
 # Example 3: Instrument LDS Reads and Writes With Thread Trace Instructions to Detect Bank Conflicts
 ### Build the instrumented version using hipcc and rdc
 ```bash
-hipcc -c -fgpu-rdc -fpass-plugin=$PWD/build/lib/libInjectAMDGCNSharedMemTtrace.so \
+hipcc -ggdb --save-temps -c -fgpu-rdc -ggdb -fpass-plugin=$PWD/build/lib/libInjectAMDGCNSharedMemTtrace.so \
 $PWD/InjectAMDGCNSharedMemTtrace/readWriteBC.cpp -o readWriteBC.o
-hipcc -fgpu-rdc readWriteBC.o -o instrumented
+hipcc --save-temps -fgpu-rdc readWriteBC.o -o instrumented
+llvm-objdump -d a.out-hip-amdgcn-amd-amdhsa-gfx90a > instrumented-amdgcn-isa.log
 ```
 
 ### Inspecting The Instrumented ISA
@@ -199,14 +202,8 @@ __asm__ __volatile__("s_mov_b32 $0 m0\n" //save the existing value in M0
 ```
 ttrace_counter is an global integer value injected and handled entirely by the pass.
 
-### Build the instrumented version using hipcc and rdc
-```bash
-hipcc -ggdb --save-temps -c -fgpu-rdc -ggdb -fpass-plugin=$PWD/build/lib/libInjectAMDGCNSharedMemTtrace.so \
-$PWD/InjectAMDGCNSharedMemTtrace/readWriteBC.cpp -o readWriteBC.o
-hipcc --save-temps -fgpu-rdc readWriteBC.o -o instrumented
-llvm-objdump -d a.out-hip-amdgcn-amd-amdhsa-gfx90a > instrumented-amdgcn-isa.log
-```
-The unique identifying index of each s_ttracedata instruction will be printed along with its corresponding source file and line number
+A unique identifying index of each s_ttracedata instruction will be printed along with its corresponding source file and line number
+
 ```bash
 0 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:16:51
 1 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:16:51
@@ -219,6 +216,6 @@ The unique identifying index of each s_ttracedata instruction will be printed al
 8 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:24:26
 9 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:24:26
 ```
-The compiler has choosen to unrolled the loops. Therefore, in this case, multiple s_ttracedata will be associated with the same source code line, but a different loop index. 
+The compiler has choosen to unrolled the loops in the kernel. Therefore, in this case, multiple s_ttracedata will be associated with the same source code line, but a different loop index. 
 
 Looking at the instrumented-amdgcn-isa.log file we can see the desire ASM instructions inserted correctly, before each ds_read and ds_write instruction, in the ISA. And, that the total number of s_ttracedata matches the number of indexes output from the pass.
