@@ -13,6 +13,7 @@ using namespace llvm;
 bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
   bool ModifiedCodeGen = false;
   auto &CTX = M.getContext();
+  bool DebugInfoWarningPrinted = false;
   IRBuilder<> ModuleBuilder(CTX);
   //This is the actual variable value that gets inserted in the Inline ASM
   Value* TtraceCounter = ModuleBuilder.getInt32(0);
@@ -24,52 +25,62 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
 
         for(Function::iterator BB = F.begin();BB!=F.end();BB++){
           for(BasicBlock::iterator I = BB->begin();I!=BB->end();I++){
-//		  	//Shared memory reads
-//			if (auto LI = dyn_cast<LoadInst>(I)){
-//        GetElementPtrInst *GEPInst = dyn_cast<GetElementPtrInst>(LI->getPointerOperand());
-//        Value *Op = GEPInst->getPointerOperand()->stripPointerCasts();
-//				unsigned AddrSpace = cast<PointerType>(Op->getType())->getAddressSpace();
-//        if (AddrSpace == 3){
-//            FunctionType *FTy = FunctionType::get(Type::getInt32Ty(CTX), true);
-//            std::string AsmString = "s_mov_b32 $0 m0\n""s_mov_b32 m0 $1""\n""s_nop 0\n""s_ttracedata\n""s_mov_b32 m0 $0\n""s_add_i32 $1 $1 1\n";
-//            IRBuilder<> Builder(LI);
-//            InlineAsm* InlineAsmFunc = InlineAsm::get(FTy, AsmString, "=s,s", true);
-//            Builder.CreateCall(InlineAsmFunc, {TtraceCounter});
-//            CounterInt++;
-//            I++;
-//            Builder.SetInsertPoint(dyn_cast<Instruction>(I));
-//            Builder.CreateCall(InlineAsm::get(FTy, "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"\
-//                                                   "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"\
-//                                                   "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n", "", false), {});      
-//        }
-//            }
-//			//Shared memory writes
+		  	//Shared memory reads
+			if (auto LI = dyn_cast<LoadInst>(I)){
+        		Value *Op = LI->getPointerOperand()->stripPointerCasts();
+				unsigned AddrSpace = cast<PointerType>(Op->getType())->getAddressSpace();
+        if (AddrSpace == 3){
+					if (DILocation *DL = dyn_cast<Instruction>(I)->getDebugLoc()) { 
+    				  std::string SourceInfo = (F.getName() + " " + DL->getFilename() + ":" + Twine(DL->getLine()) + ":" +
+    				         Twine(DL->getColumn())).str();
+					  errs() << CounterInt << " " << SourceInfo  << "\n";
+					}
+			else{
+				if(!DebugInfoWarningPrinted){
+					errs() << "warning: no debug info found, did you forget to add -ggdb?\n";
+					DebugInfoWarningPrinted = true;
+				}
+			}
+            FunctionType *FTy = FunctionType::get(Type::getInt32Ty(CTX), true);
+            std::string AsmString = "s_mov_b32 $0 m0\n""s_mov_b32 m0 $1""\n""s_nop 0\n""s_ttracedata\n""s_mov_b32 m0 $0\n""s_add_i32 $1 $1 1\n";
+            IRBuilder<> Builder(LI);
+            InlineAsm* InlineAsmFunc = InlineAsm::get(FTy, AsmString, "=s,s", true);
+            Builder.CreateCall(InlineAsmFunc, {TtraceCounter});
+            CounterInt++;
+            I++;
+            Builder.SetInsertPoint(dyn_cast<Instruction>(I));
+            Builder.CreateCall(InlineAsm::get(FTy, "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"\
+                                                   "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"\
+                                                   "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n", "", false), {});      
+        }
+            }
+			//Shared memory writes
 			if (auto SI = dyn_cast<StoreInst>(I)){
 			Value *Op = SI->getPointerOperand()->stripPointerCasts();
 			unsigned AddrSpace = cast<PointerType>(Op->getType())->getAddressSpace();
 			if (AddrSpace == 3){
-				const DebugLoc &DL = dyn_cast<Instruction>(I)->getDebugLoc();
-
 					if (DILocation *DL = dyn_cast<Instruction>(I)->getDebugLoc()) { 
-					  unsigned Line = DL->getLine();
-  					  StringRef File = DL->getFilename();
-					  errs() << CounterInt << " " << File.str() << ":" << Line << "\n";
-				}		
-				CounterInt++;
-//        GetElementPtrInst *GEPInst = dyn_cast<GetElementPtrInst>(SI->getPointerOperand());
-//        Value *Op = GEPInst->getPointerOperand()->stripPointerCasts();
-//				unsigned AddrSpace = cast<PointerType>(Op->getType())->getAddressSpace();
-//            FunctionType *FTy = FunctionType::get(Type::getInt32Ty(CTX), true);
-//            std::string AsmString = "s_mov_b32 $0 m0\n""s_mov_b32 m0 $1""\n""s_nop 0\n""s_ttracedata\n""s_mov_b32 m0 $0\n""s_add_i32 $1 $1 1\n";
-//            IRBuilder<> Builder(SI);
-//            InlineAsm* InlineAsmFunc = InlineAsm::get(FTy, AsmString, "=s,s", true);
-//            Builder.CreateCall(InlineAsmFunc, {TtraceCounter});
-//            CounterInt++;
-//            I++;
-//            Builder.SetInsertPoint(dyn_cast<Instruction>(I));
-//            Builder.CreateCall(InlineAsm::get(FTy, "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"\
-//                                                   "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"\
-//                                                   "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n", "", false), {});      
+    				  std::string SourceInfo = (F.getName() + " " + DL->getFilename() + ":" + Twine(DL->getLine()) + ":" +
+    				         Twine(DL->getColumn())).str();
+					  errs() << CounterInt << " " << SourceInfo  << "\n";
+					}		
+			else{
+				if(!DebugInfoWarningPrinted){
+					errs() << "warning: no debug info found, did you forget to add -ggdb?\n";
+					DebugInfoWarningPrinted = true;
+				}
+			}
+            FunctionType *FTy = FunctionType::get(Type::getInt32Ty(CTX), true);
+            std::string AsmString = "s_mov_b32 $0 m0\n""s_mov_b32 m0 $1""\n""s_nop 0\n""s_ttracedata\n""s_mov_b32 m0 $0\n""s_add_i32 $1 $1 1\n";
+            IRBuilder<> Builder(SI);
+            InlineAsm* InlineAsmFunc = InlineAsm::get(FTy, AsmString, "=s,s", true);
+            Builder.CreateCall(InlineAsmFunc, {TtraceCounter});
+            CounterInt++;
+            I++;
+            Builder.SetInsertPoint(dyn_cast<Instruction>(I));
+            Builder.CreateCall(InlineAsm::get(FTy, "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"\
+                                                   "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"\
+                                                   "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n", "", false), {});      
         }
             }
 //
