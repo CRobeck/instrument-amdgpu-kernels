@@ -187,9 +187,21 @@ hipcc -fgpu-rdc readWriteBC.o -o instrumented
 ```
 
 ### Inspecting The Instrumented ISA
+In this case we take a HIP kernel with known bank conflicts and instrument the shared memory ds_reads and ds_writes with s_ttracedata instructions which sends specific data, whatever is currently in the M0 register, to thread trace stream. The specifc instructions injects before both ds_reads and ds_writes are:
+```bash
+__asm__ __volatile__("s_mov_b32 $0 m0\n" //save the existing value in M0
+                     "s_mov_b32 m0 $1""\n" //set the value of M0 to the value we want to send to thread trace stream
+                     "s_nop 0\n" //Required before a s_ttracedata instruction
+                     "s_ttracedata\n" //Send data from M0 into thread trace stream
+                     "s_mov_b32 m0 $0\n //Restore the value of M0 
+                     ""s_add_i32 $1 $1 1\n //Increment the s_ttracedata instruction counter
+                      : "=s"(out) : "s" (ttrace_counter));
+```
+### Build the instrumented version using hipcc and rdc
 ```bash
 hipcc -ggdb --save-temps -c -fgpu-rdc -fpass-plugin=$PWD/build/lib/libInjectAMDGCNSharedMemTtrace.so \
 $PWD/InjectAMDGCNSharedMemTtrace/readWriteBC.cpp -o readWriteBC.o
 hipcc --save-temps -fgpu-rdc readWriteBC.o -o instrumented
 llvm-objdump -d a.out-hip-amdgcn-amd-amdhsa-gfx90a > instrumented-amdgcn-isa.log
-```bash
+```
+Looking at the instrumented-amdgcn-isa.log file we can see the desire ASM instructions inserted correctly, before each ds_read and ds_write instruction, in the ISA.
