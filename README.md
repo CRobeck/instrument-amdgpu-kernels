@@ -1,8 +1,8 @@
 # LLVM Based Instrumention of AMDGPU Kernels
 
-LLVM provides a variety of pass APIs to interact with, and modify, the compilation pipeline. The goal of this project is to develop a set of transformation passes to instrument AMDGPU kernels to get a variety of performance related information. The passes and examples are developed to be used with the AMDGPU software stack, Rocm, and the AMDGPU LLVM backend. 
+LLVM provides a variety of pass APIs to interact with, and modify, the compilation pipeline. The goal of this project is to develop a set of transformation passes to instrument AMDGPU kernels to get a variety of performance related information. The passes and examples are developed to be used with the AMDGPU software stack HIP/Rocm, the AMDGPU LLVM backend, and downstream of the compiler the SQTT capability in AMDGPU profiler [rocprofiler](https://github.com/ROCm/rocprofiler).
 
-Although HIP kernels can be compiled directly with clang/clang++ (i.e. clang++ -x hip) the vast majority of Rocm developers use the HIP compiler driver [hipcc](https://github.com/ROCm/llvm-project/tree/amd-staging/amd/hipcc#hipcc), therefore the instrumentation passes and examples presented focus on getting the LLVM pass manager and compiler tool chain to interact with both Rocm and hipcc.
+Although HIP kernels can be compiled directly with clang/clang++ (i.e., clang++ -x hip) the vast majority of Rocm developers use the HIP compiler driver [hipcc](https://github.com/ROCm/llvm-project/tree/amd-staging/amd/hipcc#hipcc), therefore the instrumentation passes and examples presented focus on getting the LLVM pass manager and compiler tool chain to interact with both Rocm and hipcc.
 
 A list of the currently implemented instrumentation passes is below. The list is under development and being actively added to.
 
@@ -196,7 +196,9 @@ __asm__ __volatile__("s_mov_b32 $0 m0\n" //save the existing value in M0
                      ""s_add_i32 $1 $1 1\n //Increment the s_ttracedata instruction counter
                       : "=s"(out) : "s" (ttrace_counter));
 ```
-ttrace_counter is an global integer value used to identify each s_ttracedata. It is injected and handled entirely by the pass. The one that is slightly different in this example is where the pass is run in the compiler pass pipeline. In the pass initalization we replace registerPipelineEarlySimplificationEPCallback with registerOptimizerLastEPCallback. This moves the pass from right after passes that do basic simplification of the input IR to the very end of the function optimization pipeline. The reason for this is the ds_reads and ds_writes are often, if not always, found inside loops. The compiler may, or may not, unroll the loops. Therefore we need to make sure when we inject the s_ttracedata instructions it is done after the loop unrolling is done to get both the correct number and placement of the injected s_ttracedata instruction in each loop iteration. If we kept the pass in the original spot using EarlySimplificationEPCallback it would be impossible to know, at the the time the pass is run, how many s_ttracedata will get actually get injected into the ISA.
+ttrace_counter is an global integer value used to identify each s_ttracedata. It is injected and handled entirely by the pass. 
+
+An additional thing that is slightly different in this example, compared to the previously presented ones, is where the pass is run in the compiler pass pipeline. In the pass initalization we replace registerPipelineEarlySimplificationEPCallback with registerOptimizerLastEPCallback. This moves the pass from right after passes that do basic simplification of the input IR to the very end of the function optimization pipeline. The reason for this is the ds_reads and ds_writes are often, if not always, found inside loops. The compiler may, or may not, unroll the loops. Therefore we need to make sure when we inject the s_ttracedata instructions it is done after the loop unrolling is done to get both the correct number and placement of the injected s_ttracedata instruction in each loop iteration. If we kept the pass in the original spot using EarlySimplificationEPCallback it would be impossible to know, at the the time the pass is run, how many s_ttracedata will get actually get injected into the ISA.
 
 ### Build the instrumented version using hipcc and rdc
 ```bash
