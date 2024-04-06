@@ -37,7 +37,7 @@ cd instrument-amdgpu-kernels
 mkdir build
 cd build
 cmake -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
--DLLVM_INSTALL_DIR=$HOME/llvm-project/build ..
+-DLLVM_INSTALL_DIR=$ROCM_LLVM ..
 cmake --build .
 ```
 
