@@ -35,10 +35,10 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
             if (AddrSpace == 3) {
               if (DILocation *DL = dyn_cast<Instruction>(I)->getDebugLoc()) {
                 std::string SourceInfo =
-                    (F.getName() + " " + DL->getFilename() + ":" +
+                    (F.getName() + "\t" + DL->getFilename() + ":" +
                      Twine(DL->getLine()) + ":" + Twine(DL->getColumn()))
                         .str();
-                errs() << CounterInt << " " << SourceInfo << "\n";
+                errs() << CounterInt << "\t" << SourceInfo << "\n";
               } else {
                 if (!DebugInfoWarningPrinted) {
                   errs() << "warning: no debug info found, did you forget to "
@@ -95,10 +95,10 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
             if (AddrSpace == 3) {
               if (DILocation *DL = dyn_cast<Instruction>(I)->getDebugLoc()) {
                 std::string SourceInfo =
-                    (F.getName() + " " + DL->getFilename() + ":" +
+                    (F.getName() + "\t" + DL->getFilename() + ":" +
                      Twine(DL->getLine()) + ":" + Twine(DL->getColumn()))
                         .str();
-                errs() << CounterInt << " " << SourceInfo << "\n";
+                errs() << CounterInt << "\t" << SourceInfo << "\n";
               } else {
                 if (!DebugInfoWarningPrinted) {
                   errs() << "warning: no debug info found, did you forget to "
