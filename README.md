@@ -205,7 +205,6 @@ ttrace_counter is an global integer value injected and handled entirely by the p
 
 Looking at the instrumented-amdgcn-isa.log file we can see the desired ASM instructions inserted correctly, before each ds_read and ds_write instruction, in the ISA.
 
-<!---
 A unique identifying index of each s_ttracedata instruction will be printed along with its corresponding source file and line number
 
 ```bash
@@ -217,10 +216,19 @@ A unique identifying index of each s_ttracedata instruction will be printed alon
 5 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:16:51
 6 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:16:51
 7 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:16:51
-8 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:24:26
-9 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:24:26
+8 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:16:51
+9 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:16:51
+10 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:16:51
+11 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:16:51
+12 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:16:51
+13 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:16:51
+14 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:16:51
+15 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:16:51
+16 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:24:26
+17 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:24:26
+Injected LDS Load/Store s_ttrace instructions at 18 source locations
 ```
 The compiler has chosen to unroll the loops in the kernel. Therefore, in this case, multiple s_ttracedata will be associated with the same source code line, but a different loop index. 
 
 Looking at the instrumented-amdgcn-isa.log file we can see the desired ASM instructions inserted correctly, before each ds_read and ds_write instruction, in the ISA. Additionally, the total number of s_ttracedata matches the number of indexes output from the pass.
- -->
+
