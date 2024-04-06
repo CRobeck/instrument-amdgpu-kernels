@@ -181,17 +181,10 @@ hipcc -fgpu-rdc InjectionFunction.o vectorAdd.o -o instrumented
 We notice identical output from the previous example however in this case a call to the injected Inline ASM would show up in the dissassembled ISA.
 
 # Example 3: Instrument LDS Reads and Writes With Thread Trace Instructions to Detect Bank Conflicts
+The s_ttracedata instruction takes whatever data is in the M0 register at the time the instruction is called and sends it to thread trace stream to be viewed during with the rocprofiler. 
 
-### Build the instrumented version using hipcc and rdc
-```bash
-hipcc -ggdb --save-temps -c -fgpu-rdc -ggdb -fpass-plugin=$PWD/build/lib/libInjectAMDGCNSharedMemTtrace.so \
-$PWD/InjectAMDGCNSharedMemTtrace/readWriteBC.cpp -o readWriteBC.o
-hipcc --save-temps -fgpu-rdc readWriteBC.o -o instrumented
-llvm-objdump -d a.out-hip-amdgcn-amd-amdhsa-gfx90a > instrumented-amdgcn-isa.log
-```
+In this example we take a HIP kernel with known bank conflicts and instrument the shared memory ds_reads and ds_writes and inject the following instructions:
 
-### Inspecting The Instrumented ISA
-In this case we take a HIP kernel with known bank conflicts and instrument the shared memory ds_reads and ds_writes with s_ttracedata instructions which sends specific data, whatever is currently in the M0 register, to thread trace stream. The specifc instructions injects before both ds_reads and ds_writes are:
 ```bash
 __asm__ __volatile__("s_mov_b32 $0 m0\n" //save the existing value in M0
                      "s_mov_b32 m0 $1""\n" //set the value of M0 to the value we want to send to thread trace stream
@@ -201,11 +194,20 @@ __asm__ __volatile__("s_mov_b32 $0 m0\n" //save the existing value in M0
                      ""s_add_i32 $1 $1 1\n //Increment the s_ttracedata instruction counter
                       : "=s"(out) : "s" (ttrace_counter));
 ```
-ttrace_counter is an global integer value injected and handled entirely by the pass.
+ttrace_counter is an global integer value used to identify each s_ttracedata. It is injected and handled entirely by the pass. The one that is slightly different in this example is where the pass is run in the compiler pass pipeline. In the pass initalization we replace registerPipelineEarlySimplificationEPCallback with registerOptimizerLastEPCallback. This moves the pass from right after passes that do basic simplification of the input IR to the very end of the function optimization pipeline. The reason for this is the ds_reads and ds_writes are often, if not always, found inside loops. The compiler may, or may not, unroll the loops. Therefore we need to make sure when we inject the s_ttracedata instructions it is done after the loop unrolling is done to get both the correct number and placement of the injected s_ttracedata instruction in each loop iteration. If we kept the pass in the original spot using EarlySimplificationEPCallback it would be impossible to know, at the the time the pass is run, how many s_ttracedata will get actually get injected into the ISA.
+
+### Build the instrumented version using hipcc and rdc
+```bash
+hipcc -ggdb --save-temps -c -fgpu-rdc -ggdb -fpass-plugin=$PWD/build/lib/libInjectAMDGCNSharedMemTtrace.so \
+$PWD/InjectAMDGCNSharedMemTtrace/readWriteBC.cpp -o readWriteBC.o
+hipcc --save-temps -fgpu-rdc readWriteBC.o -o instrumented
+llvm-objdump -d a.out-hip-amdgcn-amd-amdhsa-gfx90a > instrumented-amdgcn-isa.log
+```
+### Inspecting The Instrumented ISA
 
 Looking at the instrumented-amdgcn-isa.log file we can see the desired ASM instructions inserted correctly, before each ds_read and ds_write instruction, in the ISA.
 
-A unique identifying index of each s_ttracedata instruction will be printed along with its corresponding source file and line number
+A unique identifying index of each s_ttracedata instruction will be printed to the terminal along with its corresponding source file, line, and column number.
 
 ```bash
 0 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:16:51
@@ -228,7 +230,7 @@ A unique identifying index of each s_ttracedata instruction will be printed alon
 17 _Z6kerneli InjectAMDGCNSharedMemTtrace/readWriteBC.cpp:24:26
 Injected LDS Load/Store s_ttrace instructions at 18 source locations
 ```
-The compiler has chosen to unroll the loops in the kernel. Therefore, in this case, multiple s_ttracedata will be associated with the same source code line, but a different loop index. 
+We can see compiler has chosen to unroll, at least some part, of the loops in the kernel. Therefore, in this case, multiple s_ttracedata will be associated with the same source code line, but a different loop index. 
 
-Looking at the instrumented-amdgcn-isa.log file we can see the desired ASM instructions inserted correctly, before each ds_read and ds_write instruction, in the ISA. Additionally, the total number of s_ttracedata matches the number of indexes output from the pass.
+Looking at the instrumented-amdgcn-isa.log file we can see the desired inline ASM instructions inserted correctly, before each ds_read and ds_write instruction. As well as the nops needed for memory operations to complete. Additionally, counting the total number of s_ttracedata in the instrumented-amdgcn-isa.log will yield the same number, 18, as the number of indexes output from the pass.
 
