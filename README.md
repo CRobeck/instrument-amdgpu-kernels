@@ -54,7 +54,7 @@ __global__ void vecAdd(double *a, double *b, double *c, int n)
         c[id] = a[id] + b[id];
 }
 ```
-and the following instrumentation device function which prints an integer, if less than some threshold, that are passed to it.
+and the following instrumentation device function which prints an integer, if less than some threshold, that are passed to it. The threshold is hardcoded to 10 in this case but could easily be added as another kernel argument which the pass adds as well.
 
 ```C++
 __device__ void PrintKernel(int idx){
@@ -72,7 +72,7 @@ __global__ void vecAdd(double *a, double *b, double *c, int n)
         c[id] = a[id] + b[id];
 }
 ```
-The steps to do this, with the Rocm/HIP toolchain, are outlined below.
+The steps to do this, with the Rocm/HIP toolchain, using the [InjectAMDGCNFunc](lib/InjectAMDGCNFunction.cpp) pass, are outlined below.
 
 ### Build the baseline, uninstrumented, version
 ```bash
@@ -170,7 +170,7 @@ __global__ void vecAdd(double *a, double *b, double *c, int n)
         c[id] = a[id] + b[id];
 }
 ```
-The steps to do this, with the Rocm/HIP toolchain, are the same as the previous example just using the InjectAMDGCNInlineASM pass instead.
+The steps to do this, with the Rocm/HIP toolchain, are the same as the previous example just using the [InjectAMDGCNInlineASM](lib/InjectAMDGCNInlineASM.cpp) pass instead.
 
 ### Build the instrumented version using hipcc and rdc
 ```bash
@@ -196,9 +196,11 @@ __asm__ __volatile__("s_mov_b32 $0 m0\n" //save the existing value in M0
                      ""s_add_i32 $1 $1 1\n //Increment the s_ttracedata instruction counter
                       : "=s"(out) : "s" (ttrace_counter));
 ```
-ttrace_counter is an global integer value used to identify each s_ttracedata. It is injected and handled entirely by the pass. 
+ttrace_counter is an global integer value used to identify each s_ttracedata. The ttrace_counter integer variable is injected and handled entirely by the InjectAMDGCNSharedMemTtrace pass. 
 
 An additional thing that is slightly different in this example, compared to the previously presented ones, is where the pass is run in the compiler pass pipeline. In the pass initalization we replace registerPipelineEarlySimplificationEPCallback with registerOptimizerLastEPCallback. This moves the pass from right after passes that do basic simplification of the input IR to the very end of the function optimization pipeline. The reason for this is the ds_reads and ds_writes are often, if not always, found inside loops. The compiler may, or may not, unroll the loops. Therefore we need to make sure when we inject the s_ttracedata instructions it is done after the loop unrolling is done to get both the correct number and placement of the injected s_ttracedata instruction in each loop iteration. If we kept the pass in the original spot using EarlySimplificationEPCallback it would be impossible to know, at the the time the pass is run, how many s_ttracedata will get actually get injected into the ISA.
+
+The steps to do this, with the Rocm/HIP toolchain, are the same as before just swapping out in the [InjectAMDGCNSharedMemTtrace](lib/InjectAMDGCNSharedMemTtrace.cpp) pass.
 
 ### Build the instrumented version using hipcc and rdc
 ```bash
