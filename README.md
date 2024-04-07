@@ -2,7 +2,7 @@
 
 LLVM provides a variety of pass APIs to interact with, and modify, the compilation pipeline. The goal of this project is to develop a set of transformation passes to instrument AMDGPU kernels to get a variety of performance related information. The passes and examples are developed to be used with the AMDGPU software stack HIP/Rocm, the AMDGPU LLVM backend, and downstream of the compiler the SQTT capability in AMDGPU profiler [rocprofiler](https://github.com/ROCm/rocprofiler).
 
-Although HIP kernels can be compiled directly with clang/clang++ (i.e., clang++ -x hip) the vast majority of Rocm developers use the HIP compiler driver [hipcc](https://github.com/ROCm/llvm-project/tree/amd-staging/amd/hipcc#hipcc), therefore the instrumentation passes and examples presented focus on getting the LLVM pass manager and compiler tool chain to interact with both Rocm and hipcc.
+Although HIP kernels can be compiled directly with clang/clang++ (i.e., clang++ -x hip) the vast majority of Rocm developers use the HIP compiler driver [hipcc](https://github.com/ROCm/llvm-project/tree/amd-staging/amd/hipcc#hipcc), therefore the instrumentation passes and examples presented focus on getting the new LLVM pass manager and compiler tool chain to interact with both Rocm (version [6.0.2](https://github.com/ROCm/llvm-project/tree/rocm-6.0.2)) at the time of writing, and hipcc. 
 
 A list of the currently implemented instrumentation passes is below. The list is under development and being actively added to.
 
