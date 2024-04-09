@@ -52,12 +52,11 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
               std::string AsmString = "s_mov_b32 $0 m0\n"
                                       "s_mov_b32 m0 $1""\n"
                                       "s_nop 0\n"
-                                      "s_ttracedata\n";
               InlineAsm *InlineAsmFunc =
                   InlineAsm::get(FTy, AsmString, "=s,s", true);
               Builder.CreateCall(InlineAsmFunc, {TtraceCounter});
               Builder.SetInsertPoint(dyn_cast<Instruction>(std::next(I,1)));
-              Builder.CreateCall(InlineAsm::get(FTy,"s_mov_b32 m0 $0\n""s_add_i32 $1 $1 1\n"
+              Builder.CreateCall(InlineAsm::get(FTy,"s_ttracedata\n""s_mov_b32 m0 $0\n""s_add_i32 $1 $1 1\n"
                                                 "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"
                                                 "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"
                                                 "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"
@@ -90,13 +89,12 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
                   FunctionType::get(Type::getInt32Ty(CTX), true);
               std::string AsmString = "s_mov_b32 $0 m0\n"
                                       "s_mov_b32 m0 $1""\n"
-                                      "s_nop 0\n"
-                                      "s_ttracedata\n";
+                                      "s_nop 0\n";
               InlineAsm *InlineAsmFunc =
                   InlineAsm::get(FTy, AsmString, "=s,s", true);
               Builder.CreateCall(InlineAsmFunc, {TtraceCounter});
               Builder.SetInsertPoint(dyn_cast<Instruction>(std::next(I,1)));
-              Builder.CreateCall(InlineAsm::get(FTy,"s_mov_b32 m0 $0\n""s_add_i32 $1 $1 1\n"
+              Builder.CreateCall(InlineAsm::get(FTy,"s_ttracedata\n""s_mov_b32 m0 $0\n""s_add_i32 $1 $1 1\n"
                                                 "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"
                                                 "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"
                                                 "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"
