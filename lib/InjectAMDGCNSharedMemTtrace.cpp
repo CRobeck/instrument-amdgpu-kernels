@@ -7,6 +7,7 @@
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Passes/PassPlugin.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include <iostream>
 using namespace llvm;
 
@@ -27,8 +28,6 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
         for (BasicBlock::iterator I = BB->begin(); I != BB->end(); I++) {
           // Shared memory reads
           if (auto LI = dyn_cast<LoadInst>(I)) {
-            //        GetElementPtrInst *GEPInst =
-            //        dyn_cast<GetElementPtrInst>(LI->getPointerOperand());
             Value *Op = LI->getPointerOperand()->stripPointerCasts();
             unsigned AddrSpace =
                 cast<PointerType>(Op->getType())->getAddressSpace();
@@ -46,49 +45,28 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
                   DebugInfoWarningPrinted = true;
                 }
               }
+              IRBuilder<> Builder(dyn_cast<Instruction>(I));
+              Builder.SetInsertPoint(dyn_cast<Instruction>(std::next(I,-1)));
               FunctionType *FTy =
                   FunctionType::get(Type::getInt32Ty(CTX), true);
               std::string AsmString = "s_mov_b32 $0 m0\n"
-                                      "s_mov_b32 m0 $1"
-                                      "\n"
+                                      "s_mov_b32 m0 $1""\n"
                                       "s_nop 0\n"
-                                      "s_ttracedata\n"
-                                      "s_mov_b32 m0 $0\n"
-                                      "s_add_i32 $1 $1 1\n";
-              IRBuilder<> Builder(LI);
+                                      "s_ttracedata\n";
               InlineAsm *InlineAsmFunc =
                   InlineAsm::get(FTy, AsmString, "=s,s", true);
               Builder.CreateCall(InlineAsmFunc, {TtraceCounter});
-              I++;
-              Builder.SetInsertPoint(dyn_cast<Instruction>(I));
-              Builder.CreateCall(InlineAsm::get(FTy,
-                                                "s_nop 15\n"
-                                                "s_nop 15\n"
-                                                "s_nop 15\n"
-                                                "s_nop 15\n"
-                                                "s_nop 15\n"
-                                                "s_nop 15\n"
-                                                "s_nop 15\n"
-                                                "s_nop 15\n"
-                                                "s_nop 15\n"
-                                                "s_nop 15\n"
-                                                "s_nop 15\n"
-                                                "s_nop 15\n"
-                                                "s_nop 15\n"
-                                                "s_nop 15\n"
-                                                "s_nop 15\n"
-                                                "s_nop 15\n",
-                                                "", false),
-                                 {});
-              I--;
-
+              Builder.SetInsertPoint(dyn_cast<Instruction>(std::next(I,1)));
+              Builder.CreateCall(InlineAsm::get(FTy,"s_mov_b32 m0 $0\n""s_add_i32 $1 $1 1\n"
+                                                "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"
+                                                "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"
+                                                "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"
+                                                "s_nop 15\n","=s,s", true),{TtraceCounter});
               CounterInt++;
             }
           }
           // Shared memory writes
           if (auto SI = dyn_cast<StoreInst>(I)) {
-            //        GetElementPtrInst *GEPInst =
-            //        dyn_cast<GetElementPtrInst>(SI->getPointerOperand());
             Value *Op = SI->getPointerOperand()->stripPointerCasts();
             unsigned AddrSpace =
                 cast<PointerType>(Op->getType())->getAddressSpace();
@@ -106,41 +84,23 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
                   DebugInfoWarningPrinted = true;
                 }
               }
+              IRBuilder<> Builder(dyn_cast<Instruction>(I));
+              Builder.SetInsertPoint(dyn_cast<Instruction>(std::next(I,-1)));
               FunctionType *FTy =
                   FunctionType::get(Type::getInt32Ty(CTX), true);
               std::string AsmString = "s_mov_b32 $0 m0\n"
-                                      "s_mov_b32 m0 $1"
-                                      "\n"
+                                      "s_mov_b32 m0 $1""\n"
                                       "s_nop 0\n"
-                                      "s_ttracedata\n"
-                                      "s_mov_b32 m0 $0\n"
-                                      "s_add_i32 $1 $1 1\n";
-              IRBuilder<> Builder(SI);
+                                      "s_ttracedata\n";
               InlineAsm *InlineAsmFunc =
                   InlineAsm::get(FTy, AsmString, "=s,s", true);
               Builder.CreateCall(InlineAsmFunc, {TtraceCounter});
-              I++;
-              Builder.SetInsertPoint(dyn_cast<Instruction>(I));
-              Builder.CreateCall(InlineAsm::get(FTy,
-                                                "s_nop 15\n"
-                                                "s_nop 15\n"
-                                                "s_nop 15\n"
-                                                "s_nop 15\n"
-                                                "s_nop 15\n"
-                                                "s_nop 15\n"
-                                                "s_nop 15\n"
-                                                "s_nop 15\n"
-                                                "s_nop 15\n"
-                                                "s_nop 15\n"
-                                                "s_nop 15\n"
-                                                "s_nop 15\n"
-                                                "s_nop 15\n"
-                                                "s_nop 15\n"
-                                                "s_nop 15\n"
-                                                "s_nop 15\n",
-                                                "", true),
-                                 {});
-              I--;
+              Builder.SetInsertPoint(dyn_cast<Instruction>(std::next(I,1)));
+              Builder.CreateCall(InlineAsm::get(FTy,"s_mov_b32 m0 $0\n""s_add_i32 $1 $1 1\n"
+                                                "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"
+                                                "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"
+                                                "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"
+                                                "s_nop 15\n","=s,s", true),{TtraceCounter});
               CounterInt++;
             }
           }
