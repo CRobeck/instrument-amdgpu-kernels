@@ -1,17 +1,17 @@
 # LLVM Based Instrumention of AMDGPU Kernels
 
-LLVM provides a variety of pass APIs to interact with, and modify, the compilation pipeline. The goal of this project is to develop a set of transformation passes to instrument AMDGPU kernels to get a variety of performance related information. The passes and examples are developed to be used with the AMDGPU software stack HIP/Rocm, the AMDGPU LLVM backend, and downstream of the compiler the SQTT capability in AMDGPU profiler [rocprofiler](https://github.com/ROCm/rocprofiler).
+LLVM provides a variety of pass APIs to interact with, and modify, the compilation pipeline. The goal of this project is to develop a set of transformation passes to instrument AMDGPU kernels to get a variety of performance related information. The passes and examples are developed to be used with the AMDGPU software stack HIP/Rocm, the AMDGPU LLVM backend, and downstream of the compiler the SQTT capability in the AMDGPU Rocm profiler [rocprof](https://github.com/ROCm/rocprofiler).
 
-Although HIP kernels can be compiled directly with clang/clang++ (i.e., clang++ -x hip) the vast majority of Rocm developers use the HIP compiler driver [hipcc](https://github.com/ROCm/llvm-project/tree/amd-staging/amd/hipcc#hipcc), therefore the instrumentation passes and examples presented focus on getting the LLVM pass manager and compiler tool chain to interact with both Rocm and hipcc.
+Although HIP kernels can be compiled directly with clang/clang++ (i.e., clang++ -x hip) the vast majority of Rocm developers use the HIP compiler driver [hipcc](https://github.com/ROCm/llvm-project/tree/amd-staging/amd/hipcc#hipcc). Therefore, the instrumentation passes and examples presented focus on getting the LLVM 17+ tool chain and new pass manager integrated with Rocm, [6.0.2](https://github.com/ROCm/llvm-project/tree/rocm-6.0.2) at the time of writing, and hipcc. 
 
 A list of the currently implemented instrumentation passes is below. The list is under development and being actively added to.
 
 ### Implemented Instrumentation Passes
-[Device Function Kernel Injection](#example-1-transformation-pass-to-inject-a-device-function-into-an-amdgpu-kernel) - Transformation pass that inserts (injects) a device function into an existing HIP GPU kernel.
+[Device Function Kernel Injection](#example-1-transformation-pass-to-inject-a-device-function-into-an-amdgpu-kernel) - Transformation pass that inserts (injects) a device function into an existing HIP GPU kernel. This pass is run right after passes that do basic simplification of the input IR.
 
-[Read Register Contents With Inline ASM Injection](#example-2-transformation-pass-to-inject-reading-register-contents-into-an-amdgpu-kernel) - Transformation pass that inserts (injects) an Inline ASM function that reads the value in the vector register VGPR V0, makes a new integer variable, places the register contents in to the new variable, and injects it into an existing HIP GPU kernel.
+[Read Register Contents With Inline ASM Injection](#example-2-transformation-pass-to-inject-reading-register-contents-into-an-amdgpu-kernel) - Transformation pass that inserts (injects) an Inline ASM function that reads the value in the vector register VGPR V0, makes a new integer variable, places the register contents in to the new variable, and injects it into an existing HIP GPU kernel. This pass is run right after passes that do basic simplification of the input IR.
 
-[Instrument LDS Reads and Writes With Thread Trace Instructions to Detect Bank Conflicts](#example-3-instrument-lds-reads-and-writes-with-thread-trace-instructions-to-detect-bank-conflicts) - Transformation pass that inserts (injects) an Inline ASM function to emit s_ttracedata instruction prior to each LDS load or store instruction, sets M0 to a unique integer for each of the s_ttracedata instructions, and resets M0 to its default value after the s_ttracedata instruction it into an existing HIP GPU kernel. Nops are inserted as needed. The injected s_ttracedata instructions can then be used in down stream profiling tools for detecting bank conflicts.
+[Instrument LDS Reads and Writes With Thread Trace Instructions to Detect Bank Conflicts](#example-3-instrument-lds-reads-and-writes-with-thread-trace-instructions-to-detect-bank-conflicts) - Transformation pass that inserts (injects) an Inline ASM function to emit s_ttracedata instruction prior to each LDS load or store instruction, sets M0 to a unique integer for each of the s_ttracedata instructions, and resets M0 to its default value after the s_ttracedata instruction it into an existing HIP GPU kernel. Nops are inserted as needed. The injected s_ttracedata instructions can then be used in down stream profiling tools for detecting bank conflicts. This pass is run at the very end of the function optimization pipeline.
 
 # Getting Started
 Assuming you have a system with Rocm installed  set the correct paths and environment variables. An example module file would be:
@@ -54,7 +54,7 @@ __global__ void vecAdd(double *a, double *b, double *c, int n)
         c[id] = a[id] + b[id];
 }
 ```
-and the following instrumentation device function which prints an integer, if less than some threshold, that are passed to it.
+and the following instrumentation device function which prints an integer, if less than some threshold, that are passed to it. The threshold is hardcoded to 10 in this case but could easily be added as another kernel argument which the pass adds as well.
 
 ```C++
 __device__ void PrintKernel(int idx){
@@ -72,7 +72,7 @@ __global__ void vecAdd(double *a, double *b, double *c, int n)
         c[id] = a[id] + b[id];
 }
 ```
-The steps to do this, with the Rocm/HIP toolchain, are outlined below.
+The steps to do this, with the Rocm/HIP toolchain, using the [InjectAMDGCNFunc](lib/InjectAMDGCNFunction.cpp) pass, are outlined below.
 
 ### Build the baseline, uninstrumented, version
 ```bash
@@ -170,7 +170,7 @@ __global__ void vecAdd(double *a, double *b, double *c, int n)
         c[id] = a[id] + b[id];
 }
 ```
-The steps to do this, with the Rocm/HIP toolchain, are the same as the previous example just using the InjectAMDGCNInlineASM pass instead.
+The steps to do this, with the Rocm/HIP toolchain, are the same as the previous example just using the [InjectAMDGCNInlineASM](lib/InjectAMDGCNInlineASM.cpp) pass instead.
 
 ### Build the instrumented version using hipcc and rdc
 ```bash
@@ -188,17 +188,19 @@ The s_ttracedata instruction takes whatever data is in the M0 register at the ti
 In this example we take a HIP kernel with known bank conflicts and instrument the shared memory ds_reads and ds_writes and inject the following instructions:
 
 ```bash
-__asm__ __volatile__("s_mov_b32 $0 m0\n" //save the existing value in M0
-                     "s_mov_b32 m0 $1""\n" //set the value of M0 to the value we want to send to thread trace stream
+__asm__ __volatile__("s_mov_b32 $0 m0\n" //save the existing value in M0 to the m0_save variable
+                     "s_mov_b32 m0 $1""\n" //set the value of M0 to value of ttrace_counter variable, the value we want to send to thread trace stream
                      "s_nop 0\n" //Required before a s_ttracedata instruction
                      "s_ttracedata\n" //Send data from M0 into thread trace stream
-                     "s_mov_b32 m0 $0\n //Restore the value of M0 
-                     ""s_add_i32 $1 $1 1\n //Increment the s_ttracedata instruction counter
-                      : "=s"(out) : "s" (ttrace_counter));
+                     "s_mov_b32 m0 $0\n //Restore the value of M0 from m0_save
+                     ""s_add_i32 $1 $1 1\n //Increment the ttrace_counter, the s_ttracedata instruction counter
+                      : "=s"(m0_save) : "s" (ttrace_counter));
 ```
-ttrace_counter is an global integer value used to identify each s_ttracedata. It is injected and handled entirely by the pass. 
+ttrace_counter is an global integer value used to identify each s_ttracedata. The ttrace_counter integer variable is injected and handled entirely by the InjectAMDGCNSharedMemTtrace pass. 
 
 An additional thing that is slightly different in this example, compared to the previously presented ones, is where the pass is run in the compiler pass pipeline. In the pass initalization we replace registerPipelineEarlySimplificationEPCallback with registerOptimizerLastEPCallback. This moves the pass from right after passes that do basic simplification of the input IR to the very end of the function optimization pipeline. The reason for this is the ds_reads and ds_writes are often, if not always, found inside loops. The compiler may, or may not, unroll the loops. Therefore we need to make sure when we inject the s_ttracedata instructions it is done after the loop unrolling is done to get both the correct number and placement of the injected s_ttracedata instruction in each loop iteration. If we kept the pass in the original spot using EarlySimplificationEPCallback it would be impossible to know, at the the time the pass is run, how many s_ttracedata will get actually get injected into the ISA.
+
+The steps to do this, with the Rocm/HIP toolchain, are the same as before just swapping out in the [InjectAMDGCNSharedMemTtrace](lib/InjectAMDGCNSharedMemTtrace.cpp) pass.
 
 ### Build the instrumented version using hipcc and rdc
 ```bash
