@@ -51,7 +51,7 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
                   FunctionType::get(Type::getInt32Ty(CTX), true);
               std::string AsmString = "s_mov_b32 $0 m0\n"
                                       "s_mov_b32 m0 $1""\n"
-                                      "s_nop 0\n"
+                                      "s_nop 0\n";
               InlineAsm *InlineAsmFunc =
                   InlineAsm::get(FTy, AsmString, "=s,s", true);
               Builder.CreateCall(InlineAsmFunc, {TtraceCounter});
