@@ -245,3 +245,16 @@ We can see compiler has chosen to unroll, at least some part, of the loops in th
 
 Looking at the instrumented-amdgcn-isa.log file we can see the desired inline ASM instructions inserted correctly, before each ds_read and ds_write instruction. As well as the nops needed for memory operations to complete. Additionally, counting the total number of s_ttracedata in the instrumented-amdgcn-isa.log will yield the same number, 18, as the number of indexes output from the pass.
 
+### Instrumenting Only a Single Kernel
+By default all AMDGPU kernels are instrumented during the LDS reads and writes Thread Trace pass. However if only a single kernel is of interest it can be selected through the instrument-amdgpu-function command line argument as follows.
+
+```bash
+hipcc --save-temps -c -fgpu-rdc -ggdb \
+-fplugin=$PWD/build/lib/libInjectAMDGCNSharedMemTtrace.so \
+-fpass-plugin=$PWD/build/lib/libInjectAMDGCNSharedMemTtrace.so \
+-Xarch_device -mllvm=-instrument-amdgpu-function="_Z6kerneli" \
+$PWD/InjectAMDGCNSharedMemTtrace/readWriteBC.cpp -o readWriteBC.o
+hipcc --save-temps -fgpu-rdc readWriteBC.o -o instrumented
+llvm-objdump -d a.out-hip-amdgcn-amd-amdhsa-gfx90a > instrumented-amdgcn-isa.log
+```
+if the instrument-amdgpu-function command line argument is left off or is empty string the default of all kernels will be instrumented is used.
