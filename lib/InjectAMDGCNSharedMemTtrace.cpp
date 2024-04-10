@@ -11,6 +11,9 @@
 #include <iostream>
 using namespace llvm;
 
+static cl::opt<std::string> InstrumentAMDGPUFunction("instrument-amdgpu-function", cl::init(""),
+                          cl::desc("AMDGPU function to instrument"));                          
+
 bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
   bool ModifiedCodeGen = false;
   auto &CTX = M.getContext();
@@ -24,6 +27,7 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
   unsigned CounterInt = 0;
   for (auto &F : M) {
     if (F.getCallingConv() == CallingConv::AMDGPU_KERNEL) {
+      if(F.getName() == InstrumentAMDGPUFunction || InstrumentAMDGPUFunction.empty()){
       for (Function::iterator BB = F.begin(); BB != F.end(); BB++) {
         for (BasicBlock::iterator I = BB->begin(); I != BB->end(); I++) {
           // Shared memory reads
@@ -50,7 +54,7 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
               FunctionType *FTy =
                   FunctionType::get(Type::getInt32Ty(CTX), true);
               std::string AsmString = "s_mov_b32 $0 m0\n"
-                                      "s_mov_b32 m0 $1""\n"
+                                      "s_mov_b32 m0 $1\n"
                                       "s_nop 0\n";
               InlineAsm *InlineAsmFunc =
                   InlineAsm::get(FTy, AsmString, "=s,s", true);
@@ -88,7 +92,7 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
               FunctionType *FTy =
                   FunctionType::get(Type::getInt32Ty(CTX), true);
               std::string AsmString = "s_mov_b32 $0 m0\n"
-                                      "s_mov_b32 m0 $1""\n"
+                                      "s_mov_b32 m0 $1\n"
                                       "s_nop 0\n";
               InlineAsm *InlineAsmFunc =
                   InlineAsm::get(FTy, AsmString, "=s,s", true);
@@ -109,6 +113,7 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
              << CounterInt << " source locations\n";
 
       ModifiedCodeGen = true;
+    }
     } // End of if AMDGCN Kernel
   }   // End of functions in module loop
   return ModifiedCodeGen;
