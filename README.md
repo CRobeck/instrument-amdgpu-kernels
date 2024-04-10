@@ -13,6 +13,11 @@ A list of the currently implemented instrumentation passes is below. The list is
 
 [Instrument LDS Reads and Writes With Thread Trace Instructions to Detect Bank Conflicts](#example-3-instrument-lds-reads-and-writes-with-thread-trace-instructions-to-detect-bank-conflicts) - Transformation pass that inserts (injects) an Inline ASM function to emit s_ttracedata instruction prior to each LDS load or store instruction, sets M0 to a unique integer for each of the s_ttracedata instructions, and resets M0 to its default value after the s_ttracedata instruction it into an existing HIP GPU kernel. Nops are inserted as needed. The injected s_ttracedata instructions can then be used in down stream profiling tools for detecting bank conflicts. This pass is run at the very end of the function optimization pipeline.
 
+<!---
+[Instrument Global Reads and Writes to Detect Uncoalesced Memory Accesses](#example-4-instrument-global-reads-and-writes-to-detect-uncoalesced-memory-accesses)
+Updated implementation of the CAV 2017 paper "GPUDrano: Detecting Uncoalesced Accesses in GPU Programs"
+-->
+
 # Getting Started
 Assuming you have a system with Rocm installed  set the correct paths and environment variables. An example module file would be:
 
@@ -188,12 +193,12 @@ The s_ttracedata instruction takes whatever data is in the M0 register at the ti
 In this example we take a HIP kernel with known bank conflicts and instrument the shared memory ds_reads and ds_writes and inject the following instructions:
 
 ```bash
-__asm__ __volatile__("s_mov_b32 $0 m0\n" //save the existing value in M0 to the m0_save variable
-                     "s_mov_b32 m0 $1""\n" //set the value of M0 to value of ttrace_counter variable, the value we want to send to thread trace stream
-                     "s_nop 0\n" //Required before a s_ttracedata instruction
-                     "s_ttracedata\n" //Send data from M0 into thread trace stream
-                     "s_mov_b32 m0 $0\n //Restore the value of M0 from m0_save
-                     ""s_add_i32 $1 $1 1\n //Increment the ttrace_counter, the s_ttracedata instruction counter
+__asm__ __volatile__("s_mov_b32 $0 m0\n"    //save the existing value in M0 to the m0_save variable
+                     "s_mov_b32 m0 $1\n"    //set the value of M0 to value of ttrace_counter variable, the value we want to send to thread trace stream
+                     "s_nop 0\n"            //Required before a s_ttracedata instruction
+                     "s_ttracedata\n"       //Send data from M0 into thread trace stream
+                     "s_mov_b32 m0 $0\n"    //Restore the value of M0 from m0_save
+                     "s_add_i32 $1 $1 1\n"  //Increment the s_ttracedata counter variable, ttrace_counter
                       : "=s"(m0_save) : "s" (ttrace_counter));
 ```
 ttrace_counter is an global integer value used to identify each s_ttracedata. The ttrace_counter integer variable is injected and handled entirely by the InjectAMDGCNSharedMemTtrace pass. 
