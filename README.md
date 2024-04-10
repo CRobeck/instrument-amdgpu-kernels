@@ -13,6 +13,11 @@ A list of the currently implemented instrumentation passes is below. The list is
 
 [Instrument LDS Reads and Writes With Thread Trace Instructions to Detect Bank Conflicts](#example-3-instrument-lds-reads-and-writes-with-thread-trace-instructions-to-detect-bank-conflicts) - Transformation pass that inserts (injects) an Inline ASM function to emit s_ttracedata instruction prior to each LDS load or store instruction, sets M0 to a unique integer for each of the s_ttracedata instructions, and resets M0 to its default value after the s_ttracedata instruction it into an existing HIP GPU kernel. Nops are inserted as needed. The injected s_ttracedata instructions can then be used in down stream profiling tools for detecting bank conflicts. This pass is run at the very end of the function optimization pipeline.
 
+<!---
+[Instrument Global Reads and Writes to Detect Uncoalesced Memory Accesses](#example-4-instrument-global-reads-and-writes-to-detect-uncoalesced-memory-accesses)
+Updated implementation of the CAV 2017 paper "GPUDrano: Detecting Uncoalesced Accesses in GPU Programs"
+-->
+
 # Getting Started
 Assuming you have a system with Rocm installed  set the correct paths and environment variables. An example module file would be:
 
