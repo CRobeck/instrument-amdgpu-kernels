@@ -257,4 +257,4 @@ $PWD/InjectAMDGCNSharedMemTtrace/readWriteBC.cpp -o readWriteBC.o
 hipcc --save-temps -fgpu-rdc readWriteBC.o -o instrumented
 llvm-objdump -d a.out-hip-amdgcn-amd-amdhsa-gfx90a > instrumented-amdgcn-isa.log
 ```
-if the instrument-amdgpu-function command line argument is left off or is empty string the default of all kernels will be instrumented is used.
+if the instrument-amdgpu-function command line argument is left off or is an empty string the default, of all kernels being instrumented, is used.
