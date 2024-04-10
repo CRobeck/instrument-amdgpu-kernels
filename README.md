@@ -188,12 +188,12 @@ The s_ttracedata instruction takes whatever data is in the M0 register at the ti
 In this example we take a HIP kernel with known bank conflicts and instrument the shared memory ds_reads and ds_writes and inject the following instructions:
 
 ```bash
-__asm__ __volatile__("s_mov_b32 $0 m0\n" //save the existing value in M0 to the m0_save variable
-                     "s_mov_b32 m0 $1""\n" //set the value of M0 to value of ttrace_counter variable, the value we want to send to thread trace stream
-                     "s_nop 0\n" //Required before a s_ttracedata instruction
-                     "s_ttracedata\n" //Send data from M0 into thread trace stream
-                     "s_mov_b32 m0 $0\n //Restore the value of M0 from m0_save
-                     ""s_add_i32 $1 $1 1\n //Increment the ttrace_counter, the s_ttracedata instruction counter
+__asm__ __volatile__("s_mov_b32 $0 m0\n"    //save the existing value in M0 to the m0_save variable
+                     "s_mov_b32 m0 $1\n"    //set the value of M0 to value of ttrace_counter variable, the value we want to send to thread trace stream
+                     "s_nop 0\n"            //Required before a s_ttracedata instruction
+                     "s_ttracedata\n"       //Send data from M0 into thread trace stream
+                     "s_mov_b32 m0 $0\n"    //Restore the value of M0 from m0_save
+                     "s_add_i32 $1 $1 1\n"  //Increment the s_ttracedata counter variable, ttrace_counter
                       : "=s"(m0_save) : "s" (ttrace_counter));
 ```
 ttrace_counter is an global integer value used to identify each s_ttracedata. The ttrace_counter integer variable is injected and handled entirely by the InjectAMDGCNSharedMemTtrace pass. 
