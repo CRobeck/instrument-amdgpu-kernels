@@ -188,7 +188,7 @@ hipcc -fgpu-rdc InjectionFunction.o vectorAdd.o -o instrumented
 We notice identical output from the previous example however in this case a call to the injected Inline ASM would show up in the dissassembled ISA.
 
 # Example 3: Instrument LDS Reads and Writes With Thread Trace Instructions to Detect Bank Conflicts
-The s_ttracedata instruction takes whatever data is in the M0 register at the time the instruction is called and sends it to thread trace stream to be viewed during with the rocprofiler. 
+The s_ttracedata instruction takes whatever data is in the M0 register at the time the instruction is called and sends it to thread trace stream to be viewed during SQTT performance profiling.
 
 In this example we take a HIP kernel with known bank conflicts and instrument the shared memory ds_reads and ds_writes and inject the following instructions:
 
