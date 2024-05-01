@@ -8,7 +8,7 @@ __attribute__((used))
 __attribute__((always_inline))
 __device__ void PrintCacheLines(uint32_t idx) {
     if(threadIdx.x == 0)
-      printf("Value to send to trace stream:    %u    NumCacheLines: %u    LoadOrStore: %u,    LocationIdx: %u\n", idx,
+      printf("Value to send to trace stream:    %u    NumCacheLines: %u    LoadOrStore: %u    LocationIdx: %u\n", idx,
             static_cast<uint32_t>(idx >> 26), static_cast<uint32_t>(1 & (idx >> 25)), static_cast<uint32_t>(idx & (33554432 - 1)));
 }
 
@@ -21,7 +21,7 @@ __device__ int getNthBit(uint32_t bitArray, int nth){
       (const __attribute__((address_space(0))) void *)Ptr);
 }
 
-__attribute__((used)) __device__ uint32_t countCacheLines(void* addressPtr, uint32_t LoadOrStore, uint32_t LocationIdx, uint32_t typeSize){
+__attribute__((used)) __device__ uint32_t numCacheLines(void* addressPtr, uint32_t LoadOrStore, uint32_t LocationIdx, uint32_t typeSize){
   uint32_t NumCacheLines = 1;
  //TODO: See if this is check is actually needed since we're already checking for addresspace 3 or 4
  //in the compiler pass before injecting this function
@@ -34,10 +34,10 @@ __attribute__((used)) __device__ uint32_t countCacheLines(void* addressPtr, uint
 
   uint64_t addrArray[2 * WarpSize];
 
-  int masterThread = -1;
+  int baseThread = -1;
   for(int i = 0; i < WarpSize; i++)
     if(getNthBit(activeThreadMask, i) == 1){
-      masterThread = i;
+      baseThread = i;
       break;
     }
 
@@ -51,7 +51,7 @@ __attribute__((used)) __device__ uint32_t countCacheLines(void* addressPtr, uint
   }
   
   uint32_t LaneId = (WarpSize - 1) & threadIdx.x;
-  if(masterThread == LaneId){
+  if(baseThread == LaneId){
     NumCacheLines = 1;
     // Divide all threads by cacheLineSize (128 bytes). Every other thread represents the max address that
     // is accessed then compute (address + typeSize - 1) / cacheLineSize (128 bytes).
