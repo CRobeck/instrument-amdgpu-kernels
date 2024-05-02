@@ -26,8 +26,8 @@ static cl::list<std::string>
 static cl::opt<std::string> InstrumentationFunctionName("amdgcn-instrumentation-function",
                        cl::desc("Specify function to inject"));      
 
-static cl::opt<std::string> InstrumentationPoint("amdgcn-instrumentation-point",
-                       cl::desc("Specify point in function inject instrumentation-function")); 
+static cl::list<std::string> InstrumentationPoint("amdgcn-instrumentation-point",
+                       cl::desc("Specify point in function inject instrumentation function")); 
 
 bool AMDGCNMemCoalescing::runOnModule(Module &M) {
   bool ModifiedCodeGen = false;

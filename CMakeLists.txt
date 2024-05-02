@@ -1,5 +1,7 @@
-cmake_minimum_required(VERSION 3.20)
-project(InstrumentAMDGPUKernel)
+cmake_minimum_required(VERSION 3.21)
+project(InstrumentAMDGPUKernel LANGUAGES CXX HIP)
+
+find_package(hip REQUIRED)
 
 set(LLVM_INSTALL_DIR "" CACHE PATH "LLVM installation directory")
 
@@ -71,8 +73,20 @@ if (${SUPPORTS_FVISIBILITY_INLINES_HIDDEN_FLAG} EQUAL "1")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fvisibility-inlines-hidden")
 endif()
 
+include(FetchContent)
+FetchContent_Declare(
+  googletest
+  # Specify the commit you depend on and update it regularly.
+  URL https://github.com/google/googletest/archive/5376968f6948923e2411081fd9372e71a59d8e77.zip
+)
+FetchContent_MakeAvailable(googletest)
+
 # Set the build directories
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
 
+include(CTest)
+enable_testing()
+
 add_subdirectory(lib)
+add_subdirectory(tests)

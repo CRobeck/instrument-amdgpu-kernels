@@ -11,4 +11,8 @@
 *.s 
 *.ll
 *.sh
+*.swp
+*.swn
+*.swo
+*.bkup
 build

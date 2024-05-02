@@ -164,10 +164,11 @@ int main(){
 /**
  * Tests for accessing integers.
  */
+extern __device__ uint32_t result;
 void intTests(){
   int x[N] = {0};
   int* xDev;
-  int h_myVar;
+  uint32_t h_result;
   (void)hipMalloc(&xDev, sizeof(int) * N);
   (void)hipMemcpy(xDev, x, sizeof(int)* N, hipMemcpyHostToDevice);
 
@@ -182,8 +183,8 @@ void intTests(){
     printf(printStr, testNum, cacheLines);
     intAddOne<<<blocks, threads >>>(xDev, stride);
     (void)hipDeviceSynchronize();
-    // (void)hipMemcpyFromSymbol(&h_myVar, d_myVar, sizeof(int), 0, hipMemcpyDeviceToHost);
-    // printf("h_myVar: %d\n", h_myVar);
+    (void)hipMemcpyFromSymbol(&h_result, result, sizeof(uint32_t), 0, hipMemcpyDeviceToHost);
+    printf("h_result: %u\n", h_result);
         }
 
   // Test.

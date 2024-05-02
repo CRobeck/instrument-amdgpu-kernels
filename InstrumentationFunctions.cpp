@@ -12,6 +12,7 @@ __device__ void PrintCacheLines(uint32_t idx) {
             static_cast<uint32_t>(idx >> 26), static_cast<uint32_t>(1 & (idx >> 25)), static_cast<uint32_t>(idx & (33554432 - 1)));
 }
 
+__attribute__((always_inline))
 __device__ int getNthBit(uint32_t bitArray, int nth){
   return 1 & (bitArray >> nth);
 }
@@ -20,6 +21,8 @@ __device__ int getNthBit(uint32_t bitArray, int nth){
   return __builtin_amdgcn_is_shared(
       (const __attribute__((address_space(0))) void *)Ptr);
 }
+
+__device__ uint32_t result;
 
 __attribute__((used)) __device__ uint32_t numCacheLines(void* addressPtr, uint32_t LoadOrStore, uint32_t LocationIdx, uint32_t typeSize){
   uint32_t NumCacheLines = 1;
@@ -70,6 +73,6 @@ __attribute__((used)) __device__ uint32_t numCacheLines(void* addressPtr, uint32
             addrArray[j] = baseAddr;
       }
   }
-
-  return ((NumCacheLines << 26) | LoadOrStore << 25 | LocationIdx);
+  result = ((NumCacheLines << 26) | LoadOrStore << 25 | LocationIdx);
+  return result;
 }
