@@ -1,8 +1,8 @@
-# LLVM Based Instrumention of AMDGPU Kernels
+# LLVM Based Instrumentation of AMDGPU Kernels
 
-LLVM provides a variety of pass APIs to interact with, and modify, the compilation pipeline. The goal of this project is to develop a set of transformation passes to instrument AMDGPU kernels to get a variety of performance related information. The passes and examples are developed to be used with the AMDGPU software stack HIP/Rocm, the AMDGPU LLVM backend, and downstream of the compiler the SQTT capability in the AMDGPU Rocm profiler [rocprof](https://github.com/ROCm/rocprofiler).
+LLVM/MLIR provide a variety of pass APIs to interact with, and modify, the compilation pipeline. The goal of this project is to develop a set of transformation passes to instrument AMDGPU kernels to get a variety of performance analysis and optimization related information. The passes and examples are developed to be used with the AMDGPU software stack HIP/Rocm, the AMDGPU LLVM backend, and downstream of the compiler the SQTT capability in the AMDGPU Rocm profiler [rocprof](https://github.com/ROCm/rocprofiler).
 
-Although HIP kernels can be compiled directly with clang/clang++ (i.e., clang++ -x hip) the vast majority of Rocm developers use the HIP compiler driver [hipcc](https://github.com/ROCm/llvm-project/tree/amd-staging/amd/hipcc#hipcc). Therefore, the instrumentation passes and examples presented focus on getting the LLVM 17+ tool chain and new pass manager integrated with Rocm, [6.0.2](https://github.com/ROCm/llvm-project/tree/rocm-6.0.2) at the time of writing, and hipcc. 
+Although HIP kernels can be compiled directly with clang/clang++ (i.e., clang++ -x hip) the vast majority of Rocm developers use the HIP compiler driver [hipcc](https://github.com/ROCm/llvm-project/tree/amd-staging/amd/hipcc#hipcc) or a MLIR pipeline (e.g. Triton, PyTorch). Therefore, the instrumentation passes and examples presented focus on getting the LLVM 17+ tool chain (LLVM/MLIR) and new pass manager integrated with Rocm, [6.0.2](https://github.com/ROCm/llvm-project/tree/rocm-6.0.2) at the time of writing, and hipcc. 
 
 A list of the currently implemented instrumentation passes is below. The list is under development and being actively added to.
 
@@ -15,7 +15,7 @@ A list of the currently implemented instrumentation passes is below. The list is
 
 <!---
 [Instrument Global Reads and Writes to Detect Uncoalesced Memory Accesses](#example-4-instrument-global-reads-and-writes-to-detect-uncoalesced-memory-accesses)
-Updated implementation of the CAV 2017 paper "GPUDrano: Detecting Uncoalesced Accesses in GPU Programs"
+Updated implementation of the CAV 2017 paper "GPUDrano: Detecting Uncoalesced Accesses in GPU Programs". A command line argument is used to select the desired instrumention function from the multiple that are present and the instrumention location.
 -->
 
 # Getting Started
@@ -188,7 +188,7 @@ hipcc -fgpu-rdc InjectionFunction.o vectorAdd.o -o instrumented
 We notice identical output from the previous example however in this case a call to the injected Inline ASM would show up in the dissassembled ISA.
 
 # Example 3: Instrument LDS Reads and Writes With Thread Trace Instructions to Detect Bank Conflicts
-The s_ttracedata instruction takes whatever data is in the M0 register at the time the instruction is called and sends it to thread trace stream to be viewed during with the rocprofiler. 
+The s_ttracedata instruction takes whatever data is in the M0 register at the time the instruction is called and sends it to thread trace stream to be viewed during SQTT performance profiling.
 
 In this example we take a HIP kernel with known bank conflicts and instrument the shared memory ds_reads and ds_writes and inject the following instructions:
 
@@ -245,3 +245,16 @@ We can see compiler has chosen to unroll, at least some part, of the loops in th
 
 Looking at the instrumented-amdgcn-isa.log file we can see the desired inline ASM instructions inserted correctly, before each ds_read and ds_write instruction. As well as the nops needed for memory operations to complete. Additionally, counting the total number of s_ttracedata in the instrumented-amdgcn-isa.log will yield the same number, 18, as the number of indexes output from the pass.
 
+### Instrumenting Only a Single Kernel
+By default all AMDGPU kernels are instrumented during the LDS reads and writes Thread Trace pass. However if only a single kernel is of interest it can be selected through the instrument-amdgpu-function command line argument as follows.
+
+```bash
+hipcc --save-temps -c -fgpu-rdc -ggdb \
+-fplugin=$PWD/build/lib/libInjectAMDGCNSharedMemTtrace.so \
+-fpass-plugin=$PWD/build/lib/libInjectAMDGCNSharedMemTtrace.so \
+-Xarch_device -mllvm=-instrument-amdgpu-function="_Z6kerneli" \
+$PWD/InjectAMDGCNSharedMemTtrace/readWriteBC.cpp -o readWriteBC.o
+hipcc --save-temps -fgpu-rdc readWriteBC.o -o instrumented
+llvm-objdump -d a.out-hip-amdgcn-amd-amdhsa-gfx90a > instrumented-amdgcn-isa.log
+```
+if the instrument-amdgpu-function command line argument is left off or is an empty string the default, of all kernels being instrumented, is used.
