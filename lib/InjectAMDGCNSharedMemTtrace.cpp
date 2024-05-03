@@ -14,6 +14,26 @@ using namespace llvm;
 static cl::opt<std::string> InstrumentAMDGPUFunction("instrument-amdgpu-function", cl::init(""),
                           cl::desc("AMDGPU function to instrument"));                          
 
+static GlobalVariable *addGlobalArray(unsigned NumElts, llvm::Type *ElemType,
+                                      unsigned int AddrSpace,
+                                      llvm::Module *mainModule,
+                                      std::string name) {
+      ArrayType *ArrayTy = ArrayType::get(ElemType, NumElts);
+      GlobalVariable *GlobalArray = new GlobalVariable(
+          /*Module=*/*mainModule,
+          /*Type=*/ArrayTy,
+          /*isConstant=*/false,
+          /*Linkage=*/GlobalValue::InternalLinkage,
+          /*Initializer=*/nullptr, // has initializer, specified below
+          /*Name=*/name.c_str(),
+          /*InsertBefore*/ nullptr, GlobalVariable::NotThreadLocal, AddrSpace); 
+      std::vector<llvm::Constant *> ArrayVals;     
+      for (int i = 0; i < NumElts; i++)
+        ArrayVals.push_back(ConstantInt::get(ElemType, 0));
+  GlobalArray->setInitializer(ConstantArray::get(ArrayTy, ArrayVals));
+  return GlobalArray;
+}      
+
 bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
   bool ModifiedCodeGen = false;
   auto &CTX = M.getContext();
@@ -28,6 +48,7 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
   for (auto &F : M) {
     if (F.getCallingConv() == CallingConv::AMDGPU_KERNEL) {
       if(F.getName() == InstrumentAMDGPUFunction || InstrumentAMDGPUFunction.empty()){
+      		GlobalVariable *GlobalAtomicFlagsVar = addGlobalArray(512, Type::getInt32Ty(CTX), 1, &M, "atomicFlags");
       for (Function::iterator BB = F.begin(); BB != F.end(); BB++) {
         for (BasicBlock::iterator I = BB->begin(); I != BB->end(); I++) {
           // Shared memory reads
@@ -108,7 +129,7 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
           }
         }
       } // End of instructions in AMDGCN kernel loop
-
+      
       errs() << "Injected LDS Load/Store s_ttrace instructions at "
              << CounterInt << " source locations\n";
 
