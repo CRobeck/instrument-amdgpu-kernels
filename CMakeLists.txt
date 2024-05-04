@@ -73,6 +73,15 @@ if (${SUPPORTS_FVISIBILITY_INLINES_HIDDEN_FLAG} EQUAL "1")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fvisibility-inlines-hidden")
 endif()
 
+# Set the build directories
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
+
+# Avoid warning about DOWNLOAD_EXTRACT_TIMESTAMP in CMake 3.24:
+if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.24.0")
+	cmake_policy(SET CMP0135 NEW)
+endif()
+
 include(FetchContent)
 FetchContent_Declare(
   googletest
@@ -80,10 +89,6 @@ FetchContent_Declare(
   URL https://github.com/google/googletest/archive/5376968f6948923e2411081fd9372e71a59d8e77.zip
 )
 FetchContent_MakeAvailable(googletest)
-
-# Set the build directories
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
 
 include(CTest)
 enable_testing()
