@@ -5,7 +5,7 @@ target_compile_options(InstrumentationFunctions PRIVATE
 )
 target_compile_definitions(InstrumentationFunctions PUBLIC $<$<BOOL:${BUILD_TESTING}>:BUILD_TESTING>)
 
-add_executable(MemCoalescing MemCoalescingTest.cpp)
+add_executable(MemCoalescing MemCoalescingTests.cpp)
 
 set(InstrumentationFunction "_Z13numCacheLinesPvjjj")
 
