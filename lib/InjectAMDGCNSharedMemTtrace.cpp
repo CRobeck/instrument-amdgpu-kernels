@@ -39,12 +39,8 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
   auto &CTX = M.getContext();
   bool DebugInfoWarningPrinted = false;
   IRBuilder<> ModuleBuilder(CTX);
-  // This is the actual variable value that gets inserted in the Inline ASM
-  Value *TtraceCounter = ModuleBuilder.getInt32(0);
-  // This is the internal counter in the compiler pass. These two will not match
-  // currently b/c unrolled loops will copy/inline the InlineASM version not the
-  // internal compiler counter.
-  unsigned CounterInt = 0;
+  unsigned TtraceCounterInt = 0;
+  Value *TtraceCounterVal = ModuleBuilder.getInt32(TtraceCounterInt);  
   for (auto &F : M) {
     if (F.getCallingConv() == CallingConv::AMDGPU_KERNEL) {
       if(F.getName() == InstrumentAMDGPUFunction || InstrumentAMDGPUFunction.empty()){
@@ -62,7 +58,7 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
                     (F.getName() + "\t" + DL->getFilename() + ":" +
                      Twine(DL->getLine()) + ":" + Twine(DL->getColumn()))
                         .str();
-                errs() << CounterInt << "\t" << SourceInfo << "\n";
+                errs() << TtraceCounterInt << "\t" << SourceInfo << "\n";
               } else {
                 if (!DebugInfoWarningPrinted) {
                   errs() << "warning: no debug info found, did you forget to "
@@ -79,14 +75,14 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
                                       "s_nop 0\n";
               InlineAsm *InlineAsmFunc =
                   InlineAsm::get(FTy, AsmString, "=s,s", true);
-              Builder.CreateCall(InlineAsmFunc, {TtraceCounter});
+              Builder.CreateCall(InlineAsmFunc, {TtraceCounterVal});
               Builder.SetInsertPoint(dyn_cast<Instruction>(std::next(I,1)));
               Builder.CreateCall(InlineAsm::get(FTy,"s_ttracedata\n""s_mov_b32 m0 $0\n""s_add_i32 $1 $1 1\n"
                                                 "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"
                                                 "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"
                                                 "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"
-                                                "s_nop 15\n","=s,s", true),{TtraceCounter});
-              CounterInt++;
+                                                "s_nop 15\n","=s,s", true),{TtraceCounterVal});
+              TtraceCounterInt++;
             }
           }
           // Shared memory writes
@@ -100,7 +96,7 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
                     (F.getName() + "\t" + DL->getFilename() + ":" +
                      Twine(DL->getLine()) + ":" + Twine(DL->getColumn()))
                         .str();
-                errs() << CounterInt << "\t" << SourceInfo << "\n";
+                errs() << TtraceCounterInt << "\t" << SourceInfo << "\n";
               } else {
                 if (!DebugInfoWarningPrinted) {
                   errs() << "warning: no debug info found, did you forget to "
@@ -117,21 +113,21 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
                                       "s_nop 0\n";
               InlineAsm *InlineAsmFunc =
                   InlineAsm::get(FTy, AsmString, "=s,s", true);
-              Builder.CreateCall(InlineAsmFunc, {TtraceCounter});
+              Builder.CreateCall(InlineAsmFunc, {TtraceCounterVal});
               Builder.SetInsertPoint(dyn_cast<Instruction>(std::next(I,1)));
               Builder.CreateCall(InlineAsm::get(FTy,"s_ttracedata\n""s_mov_b32 m0 $0\n""s_add_i32 $1 $1 1\n"
                                                 "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"
                                                 "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"
                                                 "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"
-                                                "s_nop 15\n","=s,s", true),{TtraceCounter});
-              CounterInt++;
+                                                "s_nop 15\n","=s,s", true),{TtraceCounterVal});
+              TtraceCounterInt++;
             }
           }
         }
       } // End of instructions in AMDGCN kernel loop
       
       errs() << "Injected LDS Load/Store s_ttrace instructions at "
-             << CounterInt << " source locations\n";
+             << TtraceCounterInt << " source locations\n";
 
       ModifiedCodeGen = true;
     }
