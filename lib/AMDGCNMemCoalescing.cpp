@@ -23,12 +23,11 @@ static cl::list<std::string>
                        cl::desc("Specify function(s) to instrument using a "
                                 "regular expression"));
 
-//static cl::opt<std::string> InstrumentationFunctionName("amdgcn-instrumentation-function",
-//                       cl::desc("Specify function to inject"));      
+static cl::opt<std::string> InstrumentationFunctionName("amdgcn-instrumentation-function",
+                       cl::desc("Specify function to inject"));      
 
 static cl::list<std::string> InstrumentationPoint("amdgcn-instrumentation-point",
                        cl::desc("Specify point in function inject instrumentation function")); 
-static std::string InstrumentationFunctionName = "_Z13numCacheLinesPvjjj";
 
 bool AMDGCNMemCoalescing::runOnModule(Module &M) {
   bool ModifiedCodeGen = false;
