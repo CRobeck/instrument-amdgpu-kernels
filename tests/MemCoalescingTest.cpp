@@ -6,31 +6,43 @@
 
 #define N 10000
 
-__global__ void intAddOne(int* array, int stride){
+__global__ void IntPlusOne(int* array, int stride){
   int index = stride * threadIdx.x;
   array[index] = array[index] + 1;
 }
-
-// extern __device__ uint32_t result;
-
+extern __device__ uint32_t result;
 TEST(MemCoalesingTest, Ints){
   int x[N] = {0};
-  int* xDev;
-  // uint32_t h_result;
-  (void)hipMalloc(&xDev, sizeof(int) * N);
-  (void)hipMemcpy(xDev, x, sizeof(int)* N, hipMemcpyHostToDevice);
+  int* d_x;
+  uint32_t h_result;
+  (void)hipMalloc(&d_x, sizeof(int) * N);
+  (void)hipMemcpy(d_x, x, sizeof(int)* N, hipMemcpyHostToDevice);
 
-  int testNum = 5;    int blocks = 1;
-  int threads = 32;   int stride = 32;
-  int cacheLines = 32;
-  printf("\nTest %d\nCache lines expected: %d\n", testNum, cacheLines);
-  intAddOne<<<blocks, threads >>>(xDev, stride);
+  int blocks = 1; int stride = 1;
+  int threads = 32;   
+  int expectedCacheLines = 1;
+  IntPlusOne<<<blocks, threads >>>(d_x, stride);
   (void)hipDeviceSynchronize();
-  // (void)hipMemcpyFromSymbol(&h_result, result, sizeof(uint32_t), 0, hipMemcpyDeviceToHost);
-  // printf("h_result: %u\n", h_result);
-  (void)hipMemcpy(x, xDev, sizeof(int) * N, hipMemcpyDeviceToHost);
+  (void)hipMemcpyFromSymbol(&h_result, result, sizeof(uint32_t), 0, hipMemcpyDeviceToHost);
+  EXPECT_EQ(h_result, expectedCacheLines);
+
+
+  blocks = 1; threads = 32; stride = 2;
+  expectedCacheLines = 2;
+  IntPlusOne<<<blocks, threads >>>(d_x, stride);
+  (void)hipDeviceSynchronize();
+  (void)hipMemcpyFromSymbol(&h_result, result, sizeof(uint32_t), 0, hipMemcpyDeviceToHost);
+  EXPECT_EQ(h_result, expectedCacheLines);
+
+  blocks = 1; threads = 32; stride = 32;
+  expectedCacheLines = 32;
+  IntPlusOne<<<blocks, threads >>>(d_x, stride);
+  (void)hipDeviceSynchronize();
+  (void)hipMemcpyFromSymbol(&h_result, result, sizeof(uint32_t), 0, hipMemcpyDeviceToHost);
+  EXPECT_EQ(h_result, expectedCacheLines);
+
+  (void)hipMemcpy(x, d_x, sizeof(int) * N, hipMemcpyDeviceToHost);
   (void)hipFree(x);
-  EXPECT_EQ(32, cacheLines);
 }
 
 

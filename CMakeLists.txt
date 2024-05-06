@@ -90,8 +90,14 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(googletest)
 
-include(CTest)
-enable_testing()
+# enable_testing()
 
 add_subdirectory(lib)
-add_subdirectory(tests)
+
+option(BUILD_TESTING "Enable tests" OFF)
+if (${BUILD_TESTING})
+	include(CTest)
+	enable_testing()
+	add_subdirectory(tests)
+endif()
+
