@@ -32,7 +32,64 @@ static GlobalVariable *addGlobalArray(unsigned NumElts, llvm::Type *ElemType,
         ArrayVals.push_back(ConstantInt::get(ElemType, 0));
   GlobalArray->setInitializer(ConstantArray::get(ArrayTy, ArrayVals));
   return GlobalArray;
-}      
+}
+
+template <typename LoadOrStoreInst>
+bool checkInstTypeAndAddressSpace(BasicBlock::iterator &I, Function &F,
+                                  unsigned CounterInt,
+                                  bool &DebugInfoWarningPrinted) {
+  auto LSI = dyn_cast<LoadOrStoreInst>(I);
+  if (not LSI) {
+    return false;
+  }
+
+  Value *Op = LSI->getPointerOperand()->stripPointerCasts();
+  unsigned AddrSpace = cast<PointerType>(Op->getType())->getAddressSpace();
+  if (AddrSpace != 3) {
+    return false;
+  }
+
+  if (DILocation *DL = dyn_cast<Instruction>(I)->getDebugLoc()) {
+    std::string SourceInfo =
+        (F.getName() + "\t" + DL->getFilename() + ":" + Twine(DL->getLine()) +
+         ":" + Twine(DL->getColumn()))
+            .str();
+    errs() << CounterInt << "\t" << SourceInfo << "\n";
+  } else {
+    if (!DebugInfoWarningPrinted) {
+      errs() << "warning: no debug info found, did you forget to "
+                "add -ggdb?\n";
+      DebugInfoWarningPrinted = true;
+    }
+  }
+
+  return true;
+}
+
+template <typename LoadOrStoreInst>
+void instrumentIfLDSInstruction(BasicBlock::iterator &I, LLVMContext &CTX,
+                                Function &F, unsigned &CounterInt,
+                                Value *TtraceCounter,
+                                bool &DebugInfoWarningPrinted) {
+  if (not checkInstTypeAndAddressSpace<LoadOrStoreInst>(
+          I, F, CounterInt, DebugInfoWarningPrinted)) {
+    return;
+  }
+
+  IRBuilder<> Builder(dyn_cast<Instruction>(I));
+  Builder.SetInsertPoint(dyn_cast<Instruction>(std::next(I, -1)));
+  FunctionType *FTy =
+      FunctionType::get(Type::getInt32Ty(CTX), true);
+  Builder.CreateCall(InlineAsm::get(FTy,"s_mov_b32 $0 m0\n""s_mov_b32 m0 $1\n"
+                                    "s_nop 0\n","=s,s", true),{TtraceCounter});
+  Builder.SetInsertPoint(dyn_cast<Instruction>(std::next(I,1)));
+  Builder.CreateCall(InlineAsm::get(FTy,"s_ttracedata\n""s_mov_b32 m0 $0\n""s_add_i32 $1 $1 1\n"
+                                    "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"
+                                    "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"
+                                    "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"
+                                    "s_nop 15\n","=s,s", true),{TtraceCounter});
+  CounterInt++;
+}
 
 bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
   bool ModifiedCodeGen = false;
@@ -47,94 +104,26 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
   unsigned CounterInt = 0;
   for (auto &F : M) {
     if (F.getCallingConv() == CallingConv::AMDGPU_KERNEL) {
-      if(F.getName() == InstrumentAMDGPUFunction || InstrumentAMDGPUFunction.empty()){
-      		GlobalVariable *GlobalAtomicFlagsVar = addGlobalArray(512, Type::getInt32Ty(CTX), 1, &M, "atomicFlags");
-      for (Function::iterator BB = F.begin(); BB != F.end(); BB++) {
-        for (BasicBlock::iterator I = BB->begin(); I != BB->end(); I++) {
-          // Shared memory reads
-          if (auto LI = dyn_cast<LoadInst>(I)) {
-            Value *Op = LI->getPointerOperand()->stripPointerCasts();
-            unsigned AddrSpace =
-                cast<PointerType>(Op->getType())->getAddressSpace();
-            if (AddrSpace == 3) {
-              if (DILocation *DL = dyn_cast<Instruction>(I)->getDebugLoc()) {
-                std::string SourceInfo =
-                    (F.getName() + "\t" + DL->getFilename() + ":" +
-                     Twine(DL->getLine()) + ":" + Twine(DL->getColumn()))
-                        .str();
-                errs() << CounterInt << "\t" << SourceInfo << "\n";
-              } else {
-                if (!DebugInfoWarningPrinted) {
-                  errs() << "warning: no debug info found, did you forget to "
-                            "add -ggdb?\n";
-                  DebugInfoWarningPrinted = true;
-                }
-              }
-              IRBuilder<> Builder(dyn_cast<Instruction>(I));
-              Builder.SetInsertPoint(dyn_cast<Instruction>(std::next(I,-1)));
-              FunctionType *FTy =
-                  FunctionType::get(Type::getInt32Ty(CTX), true);
-              std::string AsmString = "s_mov_b32 $0 m0\n"
-                                      "s_mov_b32 m0 $1\n"
-                                      "s_nop 0\n";
-              InlineAsm *InlineAsmFunc =
-                  InlineAsm::get(FTy, AsmString, "=s,s", true);
-              Builder.CreateCall(InlineAsmFunc, {TtraceCounter});
-              Builder.SetInsertPoint(dyn_cast<Instruction>(std::next(I,1)));
-              Builder.CreateCall(InlineAsm::get(FTy,"s_ttracedata\n""s_mov_b32 m0 $0\n""s_add_i32 $1 $1 1\n"
-                                                "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"
-                                                "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"
-                                                "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"
-                                                "s_nop 15\n","=s,s", true),{TtraceCounter});
-              CounterInt++;
-            }
+      if (F.getName() == InstrumentAMDGPUFunction ||
+          InstrumentAMDGPUFunction.empty()) {
+        GlobalVariable *GlobalAtomicFlagsVar =
+            addGlobalArray(512, Type::getInt32Ty(CTX), 1, &M, "atomicFlags");
+        for (Function::iterator BB = F.begin(); BB != F.end(); BB++) {
+          for (BasicBlock::iterator I = BB->begin(); I != BB->end(); I++) {
+            // Shared memory reads
+            instrumentIfLDSInstruction<LoadInst>(
+                I, CTX, F, CounterInt, TtraceCounter, DebugInfoWarningPrinted);
+            // Shared memory writes
+            instrumentIfLDSInstruction<StoreInst>(
+                I, CTX, F, CounterInt, TtraceCounter, DebugInfoWarningPrinted);
           }
-          // Shared memory writes
-          if (auto SI = dyn_cast<StoreInst>(I)) {
-            Value *Op = SI->getPointerOperand()->stripPointerCasts();
-            unsigned AddrSpace =
-                cast<PointerType>(Op->getType())->getAddressSpace();
-            if (AddrSpace == 3) {
-              if (DILocation *DL = dyn_cast<Instruction>(I)->getDebugLoc()) {
-                std::string SourceInfo =
-                    (F.getName() + "\t" + DL->getFilename() + ":" +
-                     Twine(DL->getLine()) + ":" + Twine(DL->getColumn()))
-                        .str();
-                errs() << CounterInt << "\t" << SourceInfo << "\n";
-              } else {
-                if (!DebugInfoWarningPrinted) {
-                  errs() << "warning: no debug info found, did you forget to "
-                            "add -ggdb?\n";
-                  DebugInfoWarningPrinted = true;
-                }
-              }
-              IRBuilder<> Builder(dyn_cast<Instruction>(I));
-              Builder.SetInsertPoint(dyn_cast<Instruction>(std::next(I,-1)));
-              FunctionType *FTy =
-                  FunctionType::get(Type::getInt32Ty(CTX), true);
-              std::string AsmString = "s_mov_b32 $0 m0\n"
-                                      "s_mov_b32 m0 $1\n"
-                                      "s_nop 0\n";
-              InlineAsm *InlineAsmFunc =
-                  InlineAsm::get(FTy, AsmString, "=s,s", true);
-              Builder.CreateCall(InlineAsmFunc, {TtraceCounter});
-              Builder.SetInsertPoint(dyn_cast<Instruction>(std::next(I,1)));
-              Builder.CreateCall(InlineAsm::get(FTy,"s_ttracedata\n""s_mov_b32 m0 $0\n""s_add_i32 $1 $1 1\n"
-                                                "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"
-                                                "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"
-                                                "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"
-                                                "s_nop 15\n","=s,s", true),{TtraceCounter});
-              CounterInt++;
-            }
-          }
-        }
-      } // End of instructions in AMDGCN kernel loop
-      
-      errs() << "Injected LDS Load/Store s_ttrace instructions at "
-             << CounterInt << " source locations\n";
+        } // End of instructions in AMDGCN kernel loop
 
-      ModifiedCodeGen = true;
-    }
+        errs() << "Injected LDS Load/Store s_ttrace instructions at "
+               << CounterInt << " source locations\n";
+
+        ModifiedCodeGen = true;
+      }
     } // End of if AMDGCN Kernel
   }   // End of functions in module loop
   return ModifiedCodeGen;
