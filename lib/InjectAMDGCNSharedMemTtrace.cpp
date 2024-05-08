@@ -91,6 +91,15 @@ void instrumentIfLDSInstruction(BasicBlock::iterator &I, LLVMContext &CTX,
   CounterInt++;
 }
 
+void printIR(Function &F) {
+  errs() << F.getName() << '\n';
+  for (Function::iterator BB = F.begin(); BB != F.end(); BB++) {
+    for (BasicBlock::iterator I = BB->begin(); I != BB->end(); I++) {
+      errs() << *I << "\n";
+    }
+  }
+}
+
 bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
   bool ModifiedCodeGen = false;
   auto &CTX = M.getContext();
@@ -106,6 +115,8 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
     if (F.getCallingConv() == CallingConv::AMDGPU_KERNEL) {
       if (F.getName() == InstrumentAMDGPUFunction ||
           InstrumentAMDGPUFunction.empty()) {
+        bool print_ir = false;
+        if(print_ir){ printIR(F); }
         GlobalVariable *GlobalAtomicFlagsVar =
             addGlobalArray(512, Type::getInt32Ty(CTX), 1, &M, "atomicFlags");
         for (Function::iterator BB = F.begin(); BB != F.end(); BB++) {
@@ -123,6 +134,10 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
                << CounterInt << " source locations\n";
 
         ModifiedCodeGen = true;
+        if(print_ir){
+          errs() << "After instrumentation:\n";
+          printIR(F);
+        }
       }
     } // End of if AMDGCN Kernel
   }   // End of functions in module loop
