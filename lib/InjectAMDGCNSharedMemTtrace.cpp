@@ -69,7 +69,7 @@ bool checkInstTypeAndAddressSpace(BasicBlock::iterator &I, Function &F,
 template <typename LoadOrStoreInst>
 void instrumentIfLDSInstruction(BasicBlock::iterator &I, LLVMContext &CTX,
                                 Function &F, unsigned &CounterInt,
-                                Value *TtraceCounter,
+                                Value *&TtraceCounter,
                                 bool &DebugInfoWarningPrinted) {
   if (not checkInstTypeAndAddressSpace<LoadOrStoreInst>(
           I, F, CounterInt, DebugInfoWarningPrinted)) {
@@ -79,15 +79,26 @@ void instrumentIfLDSInstruction(BasicBlock::iterator &I, LLVMContext &CTX,
   IRBuilder<> Builder(dyn_cast<Instruction>(I));
   Builder.SetInsertPoint(dyn_cast<Instruction>(std::next(I, -1)));
   FunctionType *FTy =
-      FunctionType::get(Type::getInt32Ty(CTX), true);
-  Builder.CreateCall(InlineAsm::get(FTy,"s_mov_b32 $0 m0\n""s_mov_b32 m0 $1\n"
-                                    "s_nop 0\n","=s,s", true),{TtraceCounter});
-  Builder.SetInsertPoint(dyn_cast<Instruction>(std::next(I,1)));
-  Builder.CreateCall(InlineAsm::get(FTy,"s_ttracedata\n""s_mov_b32 m0 $0\n""s_add_i32 $1 $1 1\n"
-                                    "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"
-                                    "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"
-                                    "s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n""s_nop 15\n"
-                                    "s_nop 15\n","=s,s", true),{TtraceCounter});
+      FunctionType::get(Type::getInt32Ty(CTX), {Type::getInt32Ty(CTX)}, false);
+  Value *OldM0 = Builder.CreateCall(InlineAsm::get(FTy,
+                                                   "s_mov_b32 $0 m0\n"
+                                                   "s_mov_b32 m0 $1\n"
+                                                   "s_nop 0\n",
+                                                   "=s,s", true),
+                                    {TtraceCounter});
+  Builder.SetInsertPoint(dyn_cast<Instruction>(std::next(I, 1)));
+  FunctionType *FTy2 =
+      FunctionType::get(Type::getInt32Ty(CTX),
+                        {Type::getInt32Ty(CTX), Type::getInt32Ty(CTX)}, false);
+  TtraceCounter = Builder.CreateCall(InlineAsm::get(FTy2,
+                                                    "s_ttracedata\n"
+                                                    "s_mov_b32 m0 $1\n"
+                                                    "s_add_i32 $0 $2 1\n"
+                                                    ".rept 16\n"
+                                                    "s_nop 15\n"
+                                                    ".endr\n",
+                                                    "=s,s,s", true),
+                                     {OldM0, TtraceCounter});
   CounterInt++;
 }
 
