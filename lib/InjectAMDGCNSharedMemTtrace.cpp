@@ -197,7 +197,7 @@ PassPluginLibraryInfo getPassPluginInfo() {
 
   return {LLVM_PLUGIN_API_VERSION, "inject-amdgcn-lds-ttrace",
           LLVM_VERSION_STRING, callback};
-};
+}
 
 extern "C" LLVM_ATTRIBUTE_WEAK PassPluginLibraryInfo llvmGetPassPluginInfo() {
   return getPassPluginInfo();
