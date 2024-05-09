@@ -66,6 +66,37 @@ bool checkInstTypeAndAddressSpace(BasicBlock::iterator &I, Function &F,
   return true;
 }
 
+Value* initFlagPtr(Function& F, LLVMContext &CTX,
+                          GlobalVariable* GlobalAtomicFlagsArray){
+  auto BB = F.begin();
+  if(BB == F.end()){ return nullptr; }
+
+  auto I = BB->begin();
+  if(I == BB->end()){ return nullptr; }
+
+  IRBuilder<> Builder(dyn_cast<Instruction>(I));
+  Builder.SetInsertPoint(dyn_cast<Instruction>(I));
+  StructType *STy = StructType::get(CTX,{Type::getInt32Ty(CTX),
+                                         Type::getInt32Ty(CTX),
+                                         Type::getInt32Ty(CTX)});
+  FunctionType *FTy = FunctionType::get(STy, false);
+  // compute 9-bits offset in flag array based on SE | CU | SIMD into $0
+  Value* S =Builder.CreateCall(InlineAsm::get(FTy, 
+                                    "s_getreg_b32 $1, hwreg(HW_REG_HW_ID)\n"
+                                    "s_bfe_u32 $0, $1, 0x3000d\n" // SE id: 3 bits, 13-15
+                                    "s_lshl_b32 $0, $0, 6\n"       // create space for CU | SIMD
+                                    "s_bfe_u32 $2, $1, 0x40008\n" // CU id: 4 bits, 8-11
+                                    "s_lshl_b32 $2, $2, 2\n"         // create space for SIMD
+                                    "s_or_b32 $0, $0, $2\n"       // combine SE | CU
+                                    "s_bfe_u32 $2, $1, 0x20004\n" // SIMD id: 2 bits, 4-5
+                                    "s_or_b32 $0, $0, $2\n"         // combine SE | CU | SIMD
+                                    , "=s,=s,=s", true),{});
+  Value* FlagOffset = Builder.CreateExtractValue(S, 0);
+  FlagOffset = Builder.CreateZExt(FlagOffset, Type::getInt64Ty(CTX));
+  Value* FlagPtr = Builder.CreateGEP(Type::getInt32Ty(CTX), GlobalAtomicFlagsArray, FlagOffset);
+  return FlagPtr;
+}
+
 template <typename LoadOrStoreInst>
 void instrumentIfLDSInstruction(BasicBlock::iterator &I, LLVMContext &CTX,
                                 Function &F, unsigned &CounterInt,
@@ -128,8 +159,9 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
           InstrumentAMDGPUFunction.empty()) {
         bool print_ir = false;
         if(print_ir){ printIR(F); }
-        GlobalVariable *GlobalAtomicFlagsVar =
+        GlobalVariable *GlobalAtomicFlagsArray =
             addGlobalArray(512, Type::getInt32Ty(CTX), 1, &M, "atomicFlags");
+        Value* FlagPtr = initFlagPtr(F, CTX, GlobalAtomicFlagsArray);
         for (Function::iterator BB = F.begin(); BB != F.end(); BB++) {
           for (BasicBlock::iterator I = BB->begin(); I != BB->end(); I++) {
             // Shared memory reads
