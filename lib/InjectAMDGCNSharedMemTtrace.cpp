@@ -77,7 +77,7 @@ void instrumentIfLDSInstruction(BasicBlock::iterator &I, LLVMContext &CTX,
   }
 
   IRBuilder<> Builder(dyn_cast<Instruction>(I));
-  Builder.SetInsertPoint(dyn_cast<Instruction>(std::next(I, -1)));
+  Builder.SetInsertPoint(dyn_cast<Instruction>(I));
   FunctionType *FTy =
       FunctionType::get(Type::getInt32Ty(CTX), {Type::getInt32Ty(CTX)}, false);
   Value *OldM0 = Builder.CreateCall(InlineAsm::get(FTy,
