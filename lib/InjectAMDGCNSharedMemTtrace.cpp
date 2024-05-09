@@ -93,7 +93,8 @@ Value* initFlagPtr(Function& F, LLVMContext &CTX,
                                     , "=s,=s,=s", true),{});
   Value* FlagOffset = Builder.CreateExtractValue(S, 0);
   FlagOffset = Builder.CreateZExt(FlagOffset, Type::getInt64Ty(CTX));
-  Value* FlagPtr = Builder.CreateGEP(Type::getInt32Ty(CTX), GlobalAtomicFlagsArray, FlagOffset);
+  Value* FlagPtr = Builder.CreateInBoundsGEP(Type::getInt32Ty(CTX), GlobalAtomicFlagsArray, FlagOffset);
+  FlagPtr = Builder.CreateAddrSpaceCast(FlagPtr, Type::getInt32PtrTy(CTX));
   return FlagPtr;
 }
 
