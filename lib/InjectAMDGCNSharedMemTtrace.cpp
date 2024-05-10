@@ -12,7 +12,7 @@
 using namespace llvm;
 
 static cl::opt<std::string> InstrumentAMDGPUFunction("instrument-amdgpu-function", cl::init(""),
-                          cl::desc("AMDGPU function to instrument"));                          
+                          cl::desc("AMDGPU function to instrument"));
 
 static GlobalVariable *addGlobalArray(unsigned NumElts, llvm::Type *ElemType,
                                       unsigned int AddrSpace,
@@ -26,8 +26,8 @@ static GlobalVariable *addGlobalArray(unsigned NumElts, llvm::Type *ElemType,
           /*Linkage=*/GlobalValue::InternalLinkage,
           /*Initializer=*/nullptr, // has initializer, specified below
           /*Name=*/name.c_str(),
-          /*InsertBefore*/ nullptr, GlobalVariable::NotThreadLocal, AddrSpace); 
-      std::vector<llvm::Constant *> ArrayVals;     
+          /*InsertBefore*/ nullptr, GlobalVariable::NotThreadLocal, AddrSpace);
+      std::vector<llvm::Constant *> ArrayVals;
       for (int i = 0; i < NumElts; i++)
         ArrayVals.push_back(ConstantInt::get(ElemType, 0));
   GlobalArray->setInitializer(ConstantArray::get(ArrayTy, ArrayVals));
@@ -82,7 +82,7 @@ Value* initFlagPtr(Function& F, LLVMContext &CTX,
   FunctionType *FTy = FunctionType::get(STy, false);
   // Compute 9-bits offset for this wave in GlobalAtomicFlagsArray
   // based on SE | CU | SIMD and store offset into $0
-  Value* S =Builder.CreateCall(InlineAsm::get(FTy, 
+  Value* S =Builder.CreateCall(InlineAsm::get(FTy,
                                     "s_getreg_b32 $1, hwreg(HW_REG_HW_ID)\n"
                                     "s_bfe_u32 $0, $1, 0x3000d\n" // SE id: 3 bits, 13-15
                                     "s_lshl_b32 $0, $0, 6\n"       // create space for CU | SIMD
