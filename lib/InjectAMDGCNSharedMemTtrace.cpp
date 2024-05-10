@@ -36,7 +36,7 @@ static GlobalVariable *addGlobalArray(unsigned NumElts, llvm::Type *ElemType,
 
 template <typename LoadOrStoreInst>
 bool checkInstTypeAndAddressSpace(BasicBlock::iterator &I, Function &F,
-                                  unsigned CounterInt,
+                                  unsigned LocationCounter,
                                   bool &DebugInfoWarningPrinted) {
   auto LSI = dyn_cast<LoadOrStoreInst>(I);
   if (not LSI) {
@@ -54,7 +54,7 @@ bool checkInstTypeAndAddressSpace(BasicBlock::iterator &I, Function &F,
         (F.getName() + "\t" + DL->getFilename() + ":" + Twine(DL->getLine()) +
          ":" + Twine(DL->getColumn()))
             .str();
-    errs() << CounterInt << "\t" << SourceInfo << "\n";
+    errs() << LocationCounter << "\t" << SourceInfo << "\n";
   } else {
     if (!DebugInfoWarningPrinted) {
       errs() << "warning: no debug info found, did you forget to "
@@ -148,12 +148,12 @@ void ReleaseFlag(LLVMContext &CTX,
 
 template <typename LoadOrStoreInst>
 void instrumentIfLDSInstruction(BasicBlock::iterator &I, LLVMContext &CTX,
-                                Function &F, unsigned &CounterInt,
+                                Function &F, unsigned &LocationCounter,
                                 Value *&TtraceCounter,
                                 Value *FlagPtr,
                                 bool &DebugInfoWarningPrinted) {
   if (not checkInstTypeAndAddressSpace<LoadOrStoreInst>(
-          I, F, CounterInt, DebugInfoWarningPrinted)) {
+          I, F, LocationCounter, DebugInfoWarningPrinted)) {
     return;
   }
 
@@ -182,7 +182,7 @@ void instrumentIfLDSInstruction(BasicBlock::iterator &I, LLVMContext &CTX,
                                                     "=s,s,s", true),
                                      {OldM0, TtraceCounter});
   ReleaseFlag(CTX, Builder, FlagPtr);
-  CounterInt++;
+  LocationCounter++;
 }
 
 void printIR(Function &F) {
@@ -199,18 +199,18 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
   auto &CTX = M.getContext();
   bool DebugInfoWarningPrinted = false;
   IRBuilder<> ModuleBuilder(CTX);
-  // This is the actual variable value that gets inserted in the Inline ASM
-  Value *TtraceCounter = ModuleBuilder.getInt32(0);
   // This is the internal counter in the compiler pass. These two will not match
   // currently b/c unrolled loops will copy/inline the InlineASM version not the
   // internal compiler counter.
-  unsigned CounterInt = 0;
+  unsigned LocationCounter = 0;
   for (auto &F : M) {
     if (F.getCallingConv() == CallingConv::AMDGPU_KERNEL) {
       if (F.getName() == InstrumentAMDGPUFunction ||
           InstrumentAMDGPUFunction.empty()) {
         bool print_ir = false;
         if(print_ir){ printIR(F); }
+        // This is the actual variable value that gets inserted in the Inline ASM
+        Value *TtraceCounter = ModuleBuilder.getInt32(LocationCounter);
         GlobalVariable *GlobalAtomicFlagsArray =
             addGlobalArray(512, Type::getInt32Ty(CTX), 1, &M, "atomicFlags");
         Value* FlagPtr = initFlagPtr(F, CTX, GlobalAtomicFlagsArray);
@@ -218,15 +218,12 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
           for (BasicBlock::iterator I = BB->begin(); I != BB->end(); I++) {
             // Shared memory reads
             instrumentIfLDSInstruction<LoadInst>(
-                I, CTX, F, CounterInt, TtraceCounter, FlagPtr, DebugInfoWarningPrinted);
+                I, CTX, F, LocationCounter, TtraceCounter, FlagPtr, DebugInfoWarningPrinted);
             // Shared memory writes
             instrumentIfLDSInstruction<StoreInst>(
-                I, CTX, F, CounterInt, TtraceCounter, FlagPtr, DebugInfoWarningPrinted);
+                I, CTX, F, LocationCounter, TtraceCounter, FlagPtr, DebugInfoWarningPrinted);
           }
         } // End of instructions in AMDGCN kernel loop
-
-        errs() << "Injected LDS Load/Store s_ttrace instructions at "
-               << CounterInt << " source locations\n";
 
         ModifiedCodeGen = true;
         if(print_ir){
@@ -236,6 +233,8 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
       }
     } // End of if AMDGCN Kernel
   }   // End of functions in module loop
+        errs() << "Injected LDS Load/Store s_ttrace instructions at "
+               << LocationCounter << " source locations\n";
   return ModifiedCodeGen;
 }
 
