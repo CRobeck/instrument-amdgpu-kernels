@@ -104,10 +104,48 @@ Value* initFlagPtr(Function& F, LLVMContext &CTX,
   return FlagPtr;
 }
 
+void CASLoop(LLVMContext &CTX,
+             IRBuilder<>& Builder,
+             Value *FlagPtr,
+             uint64_t CASinit){
+  FunctionType *FTy0 = FunctionType::get(Type::getInt64Ty(CTX),
+                        {Type::getInt64Ty(CTX), Type::getInt32PtrTy(CTX)}, false);
+  Value* CASRegs = Builder.getInt64(CASinit);
+  CASRegs = Builder.CreateCall(InlineAsm::get(FTy0,
+                               "s_mov_b64 $0, $1\n"
+                               "s_atomic_cmpswap $0, $2 glc\n"
+                               "s_waitcnt lgkmcnt(0)\n",
+                               "=s,s,s", true),
+                               {CASRegs, FlagPtr});
+  Value* CASVal = Builder.CreateTrunc(CASRegs, Type::getInt32Ty(CTX));
+  Value* CASCmp = Builder.CreateLShr(CASRegs, 32);
+  CASCmp = Builder.CreateTrunc(CASCmp, Type::getInt32Ty(CTX));
+  FunctionType *FTy1 = FunctionType::get(Type::getVoidTy(CTX),
+                        {Type::getInt32Ty(CTX), Type::getInt32Ty(CTX)}, false);
+  Builder.CreateCall(InlineAsm::get(FTy1,
+                     "s_cmp_eq_u32 $0, $1\n"
+                     "s_cbranch_scc0 -5\n",
+                     "s,s", true),
+                     {CASVal, CASCmp});
+}
+
+void AcquireFlag(LLVMContext &CTX,
+             IRBuilder<>& Builder,
+             Value *FlagPtr){
+  CASLoop(CTX, Builder, FlagPtr, 1UL);
+}
+
+void ReleaseFlag(LLVMContext &CTX,
+             IRBuilder<>& Builder,
+             Value *FlagPtr){
+  CASLoop(CTX, Builder, FlagPtr, 1UL << 32);
+}
+
 template <typename LoadOrStoreInst>
 void instrumentIfLDSInstruction(BasicBlock::iterator &I, LLVMContext &CTX,
                                 Function &F, unsigned &CounterInt,
                                 Value *&TtraceCounter,
+                                Value *FlagPtr,
                                 bool &DebugInfoWarningPrinted) {
   if (not checkInstTypeAndAddressSpace<LoadOrStoreInst>(
           I, F, CounterInt, DebugInfoWarningPrinted)) {
@@ -124,6 +162,7 @@ void instrumentIfLDSInstruction(BasicBlock::iterator &I, LLVMContext &CTX,
                                                    "s_nop 0\n",
                                                    "=s,s", true),
                                     {TtraceCounter});
+  AcquireFlag(CTX, Builder, FlagPtr);
   Builder.SetInsertPoint(dyn_cast<Instruction>(std::next(I, 1)));
   FunctionType *FTy2 =
       FunctionType::get(Type::getInt32Ty(CTX),
@@ -137,6 +176,7 @@ void instrumentIfLDSInstruction(BasicBlock::iterator &I, LLVMContext &CTX,
                                                     ".endr\n",
                                                     "=s,s,s", true),
                                      {OldM0, TtraceCounter});
+  ReleaseFlag(CTX, Builder, FlagPtr);
   CounterInt++;
 }
 
@@ -173,10 +213,10 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
           for (BasicBlock::iterator I = BB->begin(); I != BB->end(); I++) {
             // Shared memory reads
             instrumentIfLDSInstruction<LoadInst>(
-                I, CTX, F, CounterInt, TtraceCounter, DebugInfoWarningPrinted);
+                I, CTX, F, CounterInt, TtraceCounter, FlagPtr, DebugInfoWarningPrinted);
             // Shared memory writes
             instrumentIfLDSInstruction<StoreInst>(
-                I, CTX, F, CounterInt, TtraceCounter, DebugInfoWarningPrinted);
+                I, CTX, F, CounterInt, TtraceCounter, FlagPtr, DebugInfoWarningPrinted);
           }
         } // End of instructions in AMDGCN kernel loop
 
