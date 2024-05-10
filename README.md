@@ -15,9 +15,13 @@ A list of the currently implemented instrumentation passes is below. The list is
 
 <!---
 [Instrument Global Reads and Writes to Detect Uncoalesced Memory Accesses](#example-4-instrument-global-reads-and-writes-to-detect-uncoalesced-memory-accesses)
-Updated implementation of the CAV 2017 paper "GPUDrano: Detecting Uncoalesced Accesses in GPU Programs". A command line argument is used to select the desired instrumention function from the multiple that are present and the instrumention location.
 -->
 
+
+<!---
+[Instrument Global Reads and Writes to Detect Uncoalesced Memory Accesses](#example-5-instrument-global-reads-and-writes-to-detect-uncoalesced-memory-accesses-triton)
+hipcc --save-temps -c  -ggdb InstrumentationFunctions.cpp -o InstrumentationFunctions
+-->
 # Getting Started
 Assuming you have a system with Rocm installed  set the correct paths and environment variables. An example module file would be:
 
