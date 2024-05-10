@@ -80,7 +80,8 @@ Value* initFlagPtr(Function& F, LLVMContext &CTX,
                                          Type::getInt32Ty(CTX),
                                          Type::getInt32Ty(CTX)});
   FunctionType *FTy = FunctionType::get(STy, false);
-  // compute 9-bits offset in flag array based on SE | CU | SIMD into $0
+  // Compute 9-bits offset for this wave in GlobalAtomicFlagsArray
+  // based on SE | CU | SIMD and store offset into $0
   Value* S =Builder.CreateCall(InlineAsm::get(FTy, 
                                     "s_getreg_b32 $1, hwreg(HW_REG_HW_ID)\n"
                                     "s_bfe_u32 $0, $1, 0x3000d\n" // SE id: 3 bits, 13-15
@@ -94,6 +95,11 @@ Value* initFlagPtr(Function& F, LLVMContext &CTX,
   Value* FlagOffset = Builder.CreateExtractValue(S, 0);
   FlagOffset = Builder.CreateZExt(FlagOffset, Type::getInt64Ty(CTX));
   Value* FlagPtr = Builder.CreateInBoundsGEP(Type::getInt32Ty(CTX), GlobalAtomicFlagsArray, FlagOffset);
+
+  // At this point, FlagPtr is a pointer into an address space (space 1, or global device memory,
+  // in our case). Such a pointer can be used for load and store ops, but if we use it with
+  // s_atomic_cmpswap, it will trigger a linker error "Invalid record". To fix that, we need to
+  // cast the address space away.
   FlagPtr = Builder.CreateAddrSpaceCast(FlagPtr, Type::getInt32PtrTy(CTX));
   return FlagPtr;
 }
