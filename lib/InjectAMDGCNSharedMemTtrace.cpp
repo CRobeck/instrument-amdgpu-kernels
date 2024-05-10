@@ -108,17 +108,30 @@ void CASLoop(LLVMContext &CTX,
              IRBuilder<>& Builder,
              Value *FlagPtr,
              uint64_t CASinit){
-  FunctionType *FTy0 = FunctionType::get(Type::getInt64Ty(CTX),
-                        {Type::getInt64Ty(CTX), Type::getInt32PtrTy(CTX)}, false);
   Value* CASRegsInit = Builder.getInt64(CASinit);
-  Value* CASRegs = Builder.CreateCall(InlineAsm::get(FTy0,
-                               "s_mov_b64 $0, $1\n"
-                               "s_atomic_cmpswap $0, $2 glc\n"
-                               "s_waitcnt lgkmcnt(0)\n"
-                               "s_cmp_eq_u64 $0, $1\n"
-                               "s_cbranch_scc1 -5\n",
-                               "=s,s,s", true),
-                               {CASRegsInit, FlagPtr});
+  StructType *STy = StructType::get(CTX,{Type::getInt64Ty(CTX),
+                                         Type::getInt64Ty(CTX)});
+  FunctionType *FTy0 = FunctionType::get(STy,
+                                         Type::getInt64Ty(CTX), false);
+  Value* InitResult = Builder.CreateCall(InlineAsm::get(FTy0,
+                                                        "s_mov_b64 $0, $2\n"
+                                                        "s_mov_b64 $1, $2\n",
+                                                        "=s,=s,s", true),
+                                                        {CASRegsInit});
+  Value* CASRegs = Builder.CreateExtractValue(InitResult, 0);
+  Value* CASComp = Builder.CreateExtractValue(InitResult, 1);
+  FunctionType *FTy1 = FunctionType::get(Type::getVoidTy(CTX),
+                                         {Type::getInt64Ty(CTX),
+                                          Type::getInt64Ty(CTX),
+                                          Type::getInt32PtrTy(CTX)},
+                                         false);
+  Builder.CreateCall(InlineAsm::get(FTy1,
+                     "s_atomic_cmpswap $0, $2 glc\n"
+                     "s_waitcnt lgkmcnt(0)\n"
+                     "s_cmp_eq_u64 $0, $1\n"
+                     "s_cbranch_scc1 -5\n",
+                     "s,s,s", true),
+                     {CASRegs, CASComp, FlagPtr});
 }
 
 void AcquireFlag(LLVMContext &CTX,
