@@ -25,7 +25,7 @@ __attribute__((always_inline))
 
 //Needed for gtest
 #ifdef BUILD_TESTING
-	__attribute__((used)) __device__ uint32_t result;
+	extern __device__ uint32_t result;
 #endif
 __attribute__((used)) __device__ uint32_t numCacheLines(void* addressPtr, uint32_t LoadOrStore, uint32_t LocationIdx, uint32_t typeSize){
   uint32_t NumCacheLines = 1;

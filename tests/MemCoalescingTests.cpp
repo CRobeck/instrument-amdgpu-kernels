@@ -15,7 +15,9 @@ __global__ void IntPlusOne(int* array, int stride){
   int index = stride * threadIdx.x;
   array[index] = array[index] + 1;
 }
-extern __device__ uint32_t result;
+
+__device__ uint32_t result;
+
 TEST(MemCoalesingTest, Ints){
   int x[N] = {0};
   int* d_x;
