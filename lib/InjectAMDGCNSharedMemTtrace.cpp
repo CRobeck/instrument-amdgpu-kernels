@@ -110,23 +110,15 @@ void CASLoop(LLVMContext &CTX,
              uint64_t CASinit){
   FunctionType *FTy0 = FunctionType::get(Type::getInt64Ty(CTX),
                         {Type::getInt64Ty(CTX), Type::getInt32PtrTy(CTX)}, false);
-  Value* CASRegs = Builder.getInt64(CASinit);
-  CASRegs = Builder.CreateCall(InlineAsm::get(FTy0,
+  Value* CASRegsInit = Builder.getInt64(CASinit);
+  Value* CASRegs = Builder.CreateCall(InlineAsm::get(FTy0,
                                "s_mov_b64 $0, $1\n"
                                "s_atomic_cmpswap $0, $2 glc\n"
-                               "s_waitcnt lgkmcnt(0)\n",
+                               "s_waitcnt lgkmcnt(0)\n"
+                               "s_cmp_eq_u64 $0, $1\n"
+                               "s_cbranch_scc1 -5\n",
                                "=s,s,s", true),
-                               {CASRegs, FlagPtr});
-  Value* CASVal = Builder.CreateTrunc(CASRegs, Type::getInt32Ty(CTX));
-  Value* CASCmp = Builder.CreateLShr(CASRegs, 32);
-  CASCmp = Builder.CreateTrunc(CASCmp, Type::getInt32Ty(CTX));
-  FunctionType *FTy1 = FunctionType::get(Type::getVoidTy(CTX),
-                        {Type::getInt32Ty(CTX), Type::getInt32Ty(CTX)}, false);
-  Builder.CreateCall(InlineAsm::get(FTy1,
-                     "s_cmp_eq_u32 $0, $1\n"
-                     "s_cbranch_scc0 -5\n",
-                     "s,s", true),
-                     {CASVal, CASCmp});
+                               {CASRegsInit, FlagPtr});
 }
 
 void AcquireFlag(LLVMContext &CTX,
