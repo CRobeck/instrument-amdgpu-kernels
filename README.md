@@ -256,8 +256,8 @@ if the instrument-amdgpu-function command line argument is left off or is an emp
 
 <!---
 # Triton
-AMDGCN_INSTRUMENTATION_LIB="/var/lib/jenkins/instrument-amdgpu-kernels/build/lib/libAMDGCNMemCoalescing.so" \
-AMDCGN_INSTRUMENTATION_FILE="/var/lib/jenkins/instrument-amdgpu-kernels/InstrumentationFunctions-hip-amdgcn-amd-amdhsa-gfx90a.bc" \
+AMDGCN_INSTRUMENTATION_LIB="$HOME/instrument-amdgpu-kernels/build/lib/libAMDGCNMemCoalescing.so" \
+AMDCGN_INSTRUMENTATION_FILE="$HOME/instrument-amdgpu-kernels/InstrumentationFunctions-hip-amdgcn-amd-amdhsa-gfx90a.bc" \
 AMDCGN_INSTRUMENTATION_FUNCTION="_Z13numCacheLinesPvjjj" \
 python tutorials/03-matrix-multiplication.py
 -->
