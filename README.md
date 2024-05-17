@@ -13,10 +13,7 @@ A list of the currently implemented instrumentation passes is below. The list is
 
 [Instrument LDS Reads and Writes With Thread Trace Instructions to Detect Bank Conflicts](#example-3-instrument-lds-reads-and-writes-with-thread-trace-instructions-to-detect-bank-conflicts) - Transformation pass that inserts (injects) an Inline ASM function to emit s_ttracedata instruction prior to each LDS load or store instruction, sets M0 to a unique integer for each of the s_ttracedata instructions, and resets M0 to its default value after the s_ttracedata instruction it into an existing HIP GPU kernel. Nops are inserted as needed. The injected s_ttracedata instructions can then be used in down stream profiling tools for detecting bank conflicts. This pass is run at the very end of the function optimization pipeline.
 
-<!---
-[Instrument Global Reads and Writes to Detect Uncoalesced Memory Accesses](#example-4-instrument-global-reads-and-writes-to-detect-uncoalesced-memory-accesses)
--->
-
+[Instrument Global Reads and Writes to Detect Uncoalesced Memory Accesses](#example-4-instrument-global-reads-and-writes-to-detect-uncoalesced-memory-accesses) - Transformation pass that inserts a function to count the number of cache lines a global load or store uses to determine uncoalesed accesses. Any number of memory transations (cache lines) needed for a particular load or store great than one indicates an uncoalesed accesses. This pass is run at the very end of the function optimization pipeline.
 
 <!---
 [Instrument Global Reads and Writes to Detect Uncoalesced Memory Accesses](#example-5-instrument-global-reads-and-writes-to-detect-uncoalesced-memory-accesses-triton)
@@ -262,3 +259,13 @@ hipcc --save-temps -fgpu-rdc readWriteBC.o -o instrumented
 llvm-objdump -d a.out-hip-amdgcn-amd-amdhsa-gfx90a > instrumented-amdgcn-isa.log
 ```
 if the instrument-amdgpu-function command line argument is left off or is an empty string the default, of all kernels being instrumented, is used.
+
+# Example 4: Instrument Global Reads and Writes To Detect Uncoalesced Memory Accesses
+In this case the example [MemCoalescingTests](tests/MemCoalescingTests.cpp) is built directly into the CMake file and includes some Googletest infrastructure. To exercise this example build with the tests on:
+
+```bash
+cmake -DCMAKE_C_COMPILER=hipcc -DCMAKE_CXX_COMPILER=hipcc \
+-DBUILD_TESTING=ON -DLLVM_INSTALL_DIR=$ROCM_LLVM ..
+```
+the test executable will be located in ```build/bin``` and can be executed directly or through running ```make test``` in the build directory
+
