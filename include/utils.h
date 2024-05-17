@@ -6,9 +6,22 @@
 #include "llvm/IRReader/IRReader.h"
 #include "llvm/Linker/Linker.h"
 #include "llvm/Support/MemoryBuffer.h"
+#include "llvm/ADT/StringExtras.h"
+#include <set>
 
 using namespace llvm;
 using namespace std;
+
+namespace instrumentation::utils {
+
+inline std::string getenv(const char *name) {
+  const char *cstr = std::getenv(name);
+  if (!cstr)
+    return "";
+  std::string result(cstr);
+  return result;
+}
+}
 
 inline static void drop_front(StringRef& str, size_t n = 1) {
   str = str.drop_front(n);
