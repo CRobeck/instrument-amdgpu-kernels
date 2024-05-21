@@ -1,4 +1,4 @@
-# LLVM Based Instrumentation of AMDGPU Kernels
+# LLVM/MLIR Based Instrumentation of AMDGPU Kernels
 
 LLVM/MLIR provide a variety of pass APIs to interact with, and modify, the compilation pipeline. The goal of this project is to develop a set of transformation passes to instrument AMDGPU kernels to get a variety of performance analysis and optimization related information. The passes and examples are developed to be used with the AMDGPU software stack HIP/Rocm, the AMDGPU LLVM backend, and downstream of the compiler the SQTT capability in the AMDGPU Rocm profiler [rocprof](https://github.com/ROCm/rocprofiler).
 
@@ -13,15 +13,6 @@ A list of the currently implemented instrumentation passes is below. The list is
 
 [Instrument LDS Reads and Writes With Thread Trace Instructions to Detect Bank Conflicts](#example-3-instrument-lds-reads-and-writes-with-thread-trace-instructions-to-detect-bank-conflicts) - Transformation pass that inserts (injects) an Inline ASM function to emit s_ttracedata instruction prior to each LDS load or store instruction, sets M0 to a unique integer for each of the s_ttracedata instructions, and resets M0 to its default value after the s_ttracedata instruction it into an existing HIP GPU kernel. Nops are inserted as needed. The injected s_ttracedata instructions can then be used in down stream profiling tools for detecting bank conflicts. This pass is run at the very end of the function optimization pipeline.
 
-<!---
-[Instrument Global Reads and Writes to Detect Uncoalesced Memory Accesses](#example-4-instrument-global-reads-and-writes-to-detect-uncoalesced-memory-accesses)
--->
-
-
-<!---
-[Instrument Global Reads and Writes to Detect Uncoalesced Memory Accesses](#example-5-instrument-global-reads-and-writes-to-detect-uncoalesced-memory-accesses-triton)
-hipcc --save-temps -c  -ggdb InstrumentationFunctions.cpp -o InstrumentationFunctions
--->
 # Getting Started
 Assuming you have a system with Rocm installed  set the correct paths and environment variables. An example module file would be:
 
@@ -262,3 +253,11 @@ hipcc --save-temps -fgpu-rdc readWriteBC.o -o instrumented
 llvm-objdump -d a.out-hip-amdgcn-amd-amdhsa-gfx90a > instrumented-amdgcn-isa.log
 ```
 if the instrument-amdgpu-function command line argument is left off or is an empty string the default, of all kernels being instrumented, is used.
+
+<!---
+# Triton
+AMDGCN_INSTRUMENTATION_LIB="$HOME/instrument-amdgpu-kernels/build/lib/libAMDGCNMemCoalescing.so" \
+AMDCGN_INSTRUMENTATION_FILE="$HOME/instrument-amdgpu-kernels/InstrumentationFunctions-hip-amdgcn-amd-amdhsa-gfx90a.bc" \
+AMDCGN_INSTRUMENTATION_FUNCTION="_Z13numCacheLinesPvjjj" \
+python tutorials/03-matrix-multiplication.py
+-->
