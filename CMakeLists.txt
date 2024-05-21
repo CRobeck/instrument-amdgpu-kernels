@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
-project(InstrumentAMDGPUKernel LANGUAGES CXX HIP)
+project(InstrumentAMDGPUKernel LANGUAGES C CXX)
 
-find_package(hip REQUIRED)
+#find_package(hip REQUIRED)
 
 set(LLVM_INSTALL_DIR "" CACHE PATH "LLVM installation directory")
 
@@ -82,13 +82,6 @@ if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.24.0")
 	cmake_policy(SET CMP0135 NEW)
 endif()
 
-include(FetchContent)
-FetchContent_Declare(
-  googletest
-  # Specify the commit you depend on and update it regularly.
-  URL https://github.com/google/googletest/archive/5376968f6948923e2411081fd9372e71a59d8e77.zip
-)
-FetchContent_MakeAvailable(googletest)
 
 # enable_testing()
 
@@ -96,6 +89,14 @@ add_subdirectory(lib)
 
 option(BUILD_TESTING "Enable tests" OFF)
 if (${BUILD_TESTING})
+	include(FetchContent)
+	FetchContent_Declare(
+	  googletest
+	  # Specify the commit you depend on and update it regularly.
+	  URL https://github.com/google/googletest/archive/5376968f6948923e2411081fd9372e71a59d8e77.zip
+	)
+	FetchContent_MakeAvailable(googletest)
+
 	include(CTest)
 	enable_testing()
 	add_subdirectory(tests)
