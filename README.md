@@ -1,4 +1,4 @@
-# LLVM Based Instrumentation of AMDGPU Kernels
+# LLVM/MLIR Based Instrumentation of AMDGPU Kernels
 
 LLVM/MLIR provide a variety of pass APIs to interact with, and modify, the compilation pipeline. The goal of this project is to develop a set of transformation passes to instrument AMDGPU kernels to get a variety of performance analysis and optimization related information. The passes and examples are developed to be used with the AMDGPU software stack HIP/Rocm, the AMDGPU LLVM backend, and downstream of the compiler the SQTT capability in the AMDGPU Rocm profiler [rocprof](https://github.com/ROCm/rocprofiler).
 
