@@ -23,6 +23,23 @@ __attribute__((always_inline))
       (const __attribute__((address_space(0))) void *)Ptr);
 }
 
+__attribute__((used)) __device__ void memTrace(void* addressPtr)
+{
+	uint64_t address = reinterpret_cast<uint64_t>(addressPtr);	
+    uint32_t lower = address & 0xffffffff, 
+    uint32_t upper = address >> 32;
+	int m0_save;
+    __asm__ __volatile__("s_mov_b32 %0 m0\n"    //save the existing value in M0 to the m0_save variable
+                         "s_mov_b32 m0 %1\n"    //set the value of M0 to value of lower 32 bits
+                         "s_nop 0\n"            //Required before a s_ttracedata instruction
+                         "s_ttracedata\n"       //Send data from M0 into thread trace stream
+    	                 "s_mov_b32 m0 %2\n"    //set the value of M0 to value of upper 32 bits
+                         "s_nop 0\n"            //Required before a s_ttracedata instruction
+                         "s_ttracedata\n"       //Send data from M0 into thread trace stream			      
+                         "s_mov_b32 m0 %0\n"    //Restore the value of M0 from m0_save
+                          : "=s"(m0_save) : "s" (lower) : "s" (upper));
+}
+
 //Needed for gtest
 #ifdef BUILD_TESTING
 	__attribute__((used)) __device__ uint32_t result;
