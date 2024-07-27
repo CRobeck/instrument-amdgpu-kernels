@@ -3,6 +3,7 @@
 
 #include "llvm/BinaryFormat/Magic.h"
 #include "llvm/IR/DiagnosticInfo.h"
+#include "llvm/IR/Module.h"
 #include "llvm/IRReader/IRReader.h"
 #include "llvm/Linker/Linker.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -128,7 +129,7 @@ bool loadInstrumentationFile(const std::string &fileName, LLVMContext &context,
 }
 
 static void
-GetAllUndefinedSymbols(Module *M, std::set<std::string> &UndefinedSymbols) {
+GetAllUndefinedSymbols(llvm::Module *M, std::set<std::string> &UndefinedSymbols) {
   static const std::string llvmIntrinsicPrefix="llvm.";
   std::set<std::string> DefinedSymbols;
   UndefinedSymbols.clear();

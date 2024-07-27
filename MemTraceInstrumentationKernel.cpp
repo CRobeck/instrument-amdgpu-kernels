@@ -2,25 +2,54 @@
 #include <stdint.h>
 #include <stdio.h>
 
-__attribute__((used)) 
+#define WaveFrontSize 64
+
+typedef struct {
+    uint32_t LocationId;
+    uint32_t WaveId;
+    uint64_t addrArray[WaveFrontSize];
+} MemTraceData_t;
+
+
 __attribute__((always_inline))
-__device__ void memTrace(void* addressPtr)
+__device__ uint32_t getThreadIdInBlock() { return __builtin_amdgcn_workitem_id_x(); }
+
+__attribute__((always_inline))
+__device__ uint32_t getWaveId() {
+  return getThreadIdInBlock() / WaveFrontSize;
+}
+
+
+__attribute__((used))
+__device__ void memTrace(void* addressPtr, uint32_t LocationId)
 {
-    uint64_t address = reinterpret_cast<uint64_t>(addressPtr);
-    uint32_t lower = address & 0xffffffff;
-    uint32_t upper = address >> 32;
-    uint32_t m0_save, new_m0;
-	__asm__ __volatile__(
-		"s_mov_b32 %0 m0\n"           // Save the existing value in M0 to the m0_save variable
-		"v_readfirstlane_b32 %1 %2\n" // Read the value of the lower 32 bits from the first thread
-		"s_mov_b32 m0 %1\n"           // Set the value of M0 to value of lower 32 bits
-		"s_nop 0\n"                   // Required before a s_ttracedata instruction
-		"s_ttracedata\n"              // Send data from M0 into thread trace stream
-		"v_readfirstlane_b32 %1 %3\n" // Read the value of the upper 32 bits from the first thread
-		"s_mov_b32 m0 %1\n"           // Set the value of M0 to value of upper 32 bits
-		"s_nop 0\n"                   // Required before a s_ttracedata instruction
-		"s_ttracedata\n"              // Send data from M0 into thread trace stream
-		"s_mov_b32 m0 %0\n"           // Restore the value of M0 from m0_save
-	         : "=s"(m0_save), "=s"(new_m0) : "v"(lower), "v"(upper) : "memory");
+
+  uint64_t address = reinterpret_cast<uint64_t>(addressPtr);
+  //Mask of the active threads in the wave
+  int activeMask = __builtin_amdgcn_read_exec();
+//  unsigned long long active_mask = __ballot(1) & __builtin_amdgcn_read_exec();
+  //Find first active thread in the wave by finding the position of the least significant bit set to 1 in the activeMask
+  const int firstActiveLane = __ffs(activeMask) - 1;
+  uint64_t addrArray[WaveFrontSize];
+  for(int i = 0; i < WaveFrontSize; i++){
+	  addrArray[i] = __shfl(address, i, WaveFrontSize);
+  }
+   uint32_t Lane = __builtin_amdgcn_mbcnt_hi(~0u, __builtin_amdgcn_mbcnt_lo(~0u, 0u));
+
+  if(Lane == firstActiveLane){
+	unsigned int hw_id; unsigned int xcc_id;
+	asm volatile("s_getreg_b32 %0, hwreg(HW_REG_HW_ID)" : "=s"(hw_id));
+//	asm volatile("s_getreg_b32 %0, hwreg(HW_REG_XCC_ID)" : "=s"(xcc_id));
+	printf("LocationId %d, Wave %d, SIMD %d, CU %d, SE %d, MEMTRACE: "
+	       "0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,"
+	       "0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,"
+	       "0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,"
+	       "0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx\n", 
+	       LocationId, (hw_id & 0xf), ((hw_id & 0x30) >> 4), ((hw_id & 0xf00) >> 8), ((hw_id & 0xe000) >> 13),
+	        addrArray[0],   addrArray[1], addrArray[2],  addrArray[3],  addrArray[4],  addrArray[5],  addrArray[6],  addrArray[7],  addrArray[8],  addrArray[9],  addrArray[10], addrArray[11], addrArray[12], addrArray[13], addrArray[14], addrArray[15],
+	        addrArray[16], addrArray[17], addrArray[18], addrArray[19], addrArray[20], addrArray[21], addrArray[22], addrArray[23], addrArray[24], addrArray[25], addrArray[26], addrArray[27], addrArray[28], addrArray[29], addrArray[30], addrArray[31],
+	        addrArray[32], addrArray[33], addrArray[34], addrArray[35], addrArray[36], addrArray[37], addrArray[38], addrArray[39], addrArray[40], addrArray[41], addrArray[42], addrArray[43], addrArray[44], addrArray[45], addrArray[46], addrArray[47],
+	        addrArray[48], addrArray[49], addrArray[50], addrArray[51], addrArray[52], addrArray[53], addrArray[54], addrArray[55], addrArray[56], addrArray[57], addrArray[58], addrArray[59], addrArray[60], addrArray[61], addrArray[62], addrArray[63]);	  
+  }
 }
 
