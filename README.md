@@ -19,6 +19,11 @@ A list of the currently implemented instrumentation passes is below. The list is
 [Instrument Global Reads and Writes to Detect Uncoalesced Memory Accesses](#example-5-instrument-global-reads-and-writes-to-detect-uncoalesced-memory-accesses-triton)
 hipcc --save-temps -c  -ggdb InstrumentationFunctions.cpp -o InstrumentationFunctions
 -->
+
+<!---
+Memory traces of Triton machine learning compiler kernels
+
+-->
 # Getting Started
 Assuming you have a system with Rocm installed  set the correct paths and environment variables. An example module file would be:
 
