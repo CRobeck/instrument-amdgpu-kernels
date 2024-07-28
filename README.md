@@ -82,18 +82,18 @@ The steps to do this, with the Rocm/HIP toolchain, using the [InjectAMDGCNFunc](
 
 ### Build the baseline, uninstrumented, version
 ```bash
-hipcc $PWD/InjectAMDGCNFunction/vectorAdd.cpp -o vectorAdd
+hipcc $PWD/examples/vectorAdd.cpp -o vectorAdd
 ```
 
 ### Build the instrumented version using hipcc and rdc
 ```bash
 hipcc -c -fgpu-rdc -fpass-plugin=$PWD/build/lib/libInjectAMDGCNFunction.so \
-$PWD/InjectAMDGCNFunction/vectorAdd.cpp -o vectorAdd.o
-hipcc -c -fgpu-rdc $PWD/InjectAMDGCNFunction/InjectionFunction.cpp -o InjectionFunction.o
+$PWD/examples/vectorAdd.cpp -o vectorAdd.o
+hipcc -c -fgpu-rdc $PWD/examples/ExampleInjectionFunction.cpp -o InjectionFunction.o
 hipcc -fgpu-rdc InjectionFunction.o vectorAdd.o -o instrumented
 ```
 
-Some magic behind the scenes: One might notice that the instrumentation function PrintKernel is defined in InjectionFunction.cpp but used in vectorAdd.cpp. This would usually be dealt with using a forward declaration for PrintKernel in vectorAdd.cpp and the rdc flag in hipcc, the function resolution then handled by the linker. However, this is unattractive for our use case for a variety of reasons:
+Some magic behind the scenes: One might notice that the instrumentation function PrintKernel is defined in ExampleInjectionFunction.cpp but used in vectorAdd.cpp. This would usually be dealt with using a forward declaration for PrintKernel in vectorAdd.cpp and the rdc flag in hipcc, the function resolution then handled by the linker. However, this is unattractive for our use case for a variety of reasons:
 
 1. It requires modification of the uninstrumented file(s) with, a potentially large number of, instrumentation functions.
 2. The actually instrumentation function(s) that would need to be forward declared is unknown until the actual instrumentation pass is called. Therefore this would essentially require forward declaring every instrumentation function in every file containing a possible target kernel function.
@@ -181,8 +181,8 @@ The steps to do this, with the Rocm/HIP toolchain, are the same as the previous 
 ### Build the instrumented version using hipcc and rdc
 ```bash
 hipcc -c -fgpu-rdc -fpass-plugin=$PWD/build/lib/libInjectAMDGCNInlineASM.so \
-$PWD/InjectAMDGCNInlineASM/vectorAdd.cpp -o vectorAdd.o
-hipcc -c -fgpu-rdc $PWD/InjectAMDGCNInlineASM/InjectionFunction.cpp -o InjectionFunction.o
+$PWD/examples/vectorAdd.cpp -o vectorAdd.o
+hipcc -c -fgpu-rdc $PWD/examples/ExampleInjectionFunction.cpp -o InjectionFunction.o
 hipcc -fgpu-rdc InjectionFunction.o vectorAdd.o -o instrumented
 ```
 
@@ -269,3 +269,10 @@ cmake -DCMAKE_C_COMPILER=hipcc -DCMAKE_CXX_COMPILER=hipcc \
 ```
 the test executable will be located in ```build/bin``` and can be executed directly or through running ```make test``` in the build directory
 
+<!---
+# Triton
+AMDGCN_INSTRUMENTATION_LIB="$HOME/instrument-amdgpu-kernels/build/lib/libAMDGCNMemCoalescing.so" \
+AMDCGN_INSTRUMENTATION_FILE="$HOME/instrument-amdgpu-kernels/InstrumentationFunctions-hip-amdgcn-amd-amdhsa-gfx90a.bc" \
+AMDCGN_INSTRUMENTATION_FUNCTION="_Z13numCacheLinesPvjjj" \
+python tutorials/03-matrix-multiplication.py
+-->

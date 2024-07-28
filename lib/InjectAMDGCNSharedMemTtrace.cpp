@@ -100,7 +100,7 @@ Value* initFlagPtr(Function& F, LLVMContext &CTX,
   // in our case). Such a pointer can be used for load and store ops, but if we use it with
   // s_atomic_cmpswap, it will trigger a linker error "Invalid record". To fix that, we need to
   // cast the address space away.
-  FlagPtr = Builder.CreateAddrSpaceCast(FlagPtr, Type::getInt32PtrTy(CTX));
+  FlagPtr = Builder.CreateAddrSpaceCast(FlagPtr, FlagPtr->getType());
   return FlagPtr;
 }
 
@@ -123,7 +123,7 @@ void CASLoop(LLVMContext &CTX,
   FunctionType *FTy1 = FunctionType::get(Type::getVoidTy(CTX),
                                          {Type::getInt64Ty(CTX),
                                           Type::getInt64Ty(CTX),
-                                          Type::getInt32PtrTy(CTX)},
+                                          FlagPtr->getType()},
                                          false);
   Builder.CreateCall(InlineAsm::get(FTy1,
                      "s_atomic_cmpswap $0, $2 glc\n"
