@@ -1,6 +1,6 @@
 # LLVM/MLIR Based Instrumentation of AMDGPU Kernels
 
-LLVM/MLIR provide a variety of pass APIs to interact with, and modify, the compilation pipeline. The goal of this project is to develop a set of transformation passes to instrument AMDGPU kernels to get a variety of performance analysis and optimization related information. The passes and examples are developed to be used with the AMDGPU software stack HIP/Rocm, the AMDGPU LLVM backend, and downstream of the compiler the SQTT capability in the AMDGPU Rocm profiler [rocprof](https://github.com/ROCm/rocprofiler).
+LLVM/MLIR provide a variety of pass APIs to interact with, and modify, the compilation pipeline. The goal of this project is to develop a set of transformation passes to instrument AMDGPU kernels to get a variety of performance analysis and optimization related information. The passes and examples are developed to be used with the AMDGPU software stack HIP/Rocm, the AMDGPU LLVM backend.
 
 Although HIP kernels can be compiled directly with clang/clang++ (i.e., clang++ -x hip) the vast majority of Rocm developers use the HIP compiler driver [hipcc](https://github.com/ROCm/llvm-project/tree/amd-staging/amd/hipcc#hipcc) or a MLIR pipeline (e.g. Triton, PyTorch). Therefore, the instrumentation passes and examples presented focus on getting the LLVM 17+ tool chain (LLVM/MLIR) and new pass manager integrated with Rocm, [6.0.2](https://github.com/ROCm/llvm-project/tree/rocm-6.0.2) at the time of writing, and hipcc. 
 
@@ -18,6 +18,11 @@ A list of the currently implemented instrumentation passes is below. The list is
 <!---
 [Instrument Global Reads and Writes to Detect Uncoalesced Memory Accesses](#example-5-instrument-global-reads-and-writes-to-detect-uncoalesced-memory-accesses-triton)
 hipcc --save-temps -c  -ggdb InstrumentationFunctions.cpp -o InstrumentationFunctions
+-->
+
+<!---
+Memory traces of Triton machine learning compiler kernels
+
 -->
 # Getting Started
 Assuming you have a system with Rocm installed  set the correct paths and environment variables. An example module file would be:
@@ -189,7 +194,7 @@ hipcc -fgpu-rdc InjectionFunction.o vectorAdd.o -o instrumented
 We notice identical output from the previous example however in this case a call to the injected Inline ASM would show up in the dissassembled ISA.
 
 # Example 3: Instrument LDS Reads and Writes With Thread Trace Instructions to Detect Bank Conflicts
-The s_ttracedata instruction takes whatever data is in the M0 register at the time the instruction is called and sends it to thread trace stream to be viewed during SQTT performance profiling.
+The s_ttracedata instruction takes whatever data is in the M0 register at the time the instruction is called and sends it to thread trace stream to be viewed during profiling.
 
 In this example we take a HIP kernel with known bank conflicts and instrument the shared memory ds_reads and ds_writes and inject the following instructions:
 

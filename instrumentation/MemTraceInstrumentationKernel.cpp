@@ -4,13 +4,6 @@
 
 #define WaveFrontSize 64
 
-typedef struct {
-    uint32_t LocationId;
-    uint32_t WaveId;
-    uint64_t addrArray[WaveFrontSize];
-} MemTraceData_t;
-
-
 __attribute__((always_inline))
 __device__ uint32_t getThreadIdInBlock() { return __builtin_amdgcn_workitem_id_x(); }
 
@@ -18,7 +11,6 @@ __attribute__((always_inline))
 __device__ uint32_t getWaveId() {
   return getThreadIdInBlock() / WaveFrontSize;
 }
-
 
 __attribute__((used))
 __device__ void memTrace(void* addressPtr, uint32_t LocationId)
