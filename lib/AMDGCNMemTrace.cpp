@@ -9,6 +9,8 @@
 #include "llvm/Support/raw_ostream.h"
 #include <iostream>
 #include <vector>
+#include <map>
+
 using namespace llvm;
 using namespace std;
 
