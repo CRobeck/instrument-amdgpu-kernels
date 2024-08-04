@@ -14,17 +14,16 @@
 using namespace llvm;
 using namespace std;
 
+std::string InstrumentationFunctionFile = instrumentation::utils::getenv("AMDCGN_INSTRUMENTATION_FUNCTIONS_FILE");
 std::map<int, std::string> AddrSpaceMap = {{0, "FLAT"},
 					   {1, "GLOBAL"},
 					   {3, "SHARED"},
 					   {4, "CONSTANT"}};
-
 std::string LoadOrStoreMap(const BasicBlock::iterator &I){
 		if (LoadInst* LI = dyn_cast<LoadInst>(I)) return "LOAD";
 		else if (StoreInst* SI = dyn_cast<StoreInst>(I)) return "STORE";
 		else throw std::runtime_error("Error: unknown operation type");
 }
-
 template <typename LoadOrStoreInst> 
 void InjectingInstrumentationFunction(const BasicBlock::iterator &I, const Function &F, const llvm::Module &M,
 				      uint32_t &LocationCounter){
@@ -53,7 +52,7 @@ void InjectingInstrumentationFunction(const BasicBlock::iterator &I, const Funct
 }
 
 
-std::string InstrumentationFunctionFile = instrumentation::utils::getenv("AMDCGN_INSTRUMENTATION_FUNCTIONS_FILE");
+
 bool AMDGCNMemTrace::runOnModule(Module &M) {
   bool ModifiedCodeGen = false;
   auto &CTX = M.getContext();
