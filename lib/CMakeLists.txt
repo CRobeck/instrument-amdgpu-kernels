@@ -40,6 +40,8 @@ foreach( plugin ${AMDGCN_INSTRUMENTATION_PASSES} )
       LLVMCore
       LLVMIRReader
       LLVMLinker
+      LLVMSupport
+      LLVMBitWriter
       "$<$<PLATFORM_ID:Darwin>:-undefined dynamic_lookup>"
       )
 endforeach()
