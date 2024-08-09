@@ -91,13 +91,32 @@ std::unique_ptr<Module> CloneModuleAndAddArg(
   }
 
   // Loop over the functions in the module, making external functions as before
+//  for (const Function &I : M) {
+//    Function *NF =
+//        Function::Create(cast<FunctionType>(I.getValueType()), I.getLinkage(),
+//                         I.getAddressSpace(), I.getName(), New.get());
+//    NF->copyAttributesFrom(&I);
+//    VMap[&I] = NF;
+//  }
+
+   /* Add extra kerel pointer argument */
+  // Loop over the functions in the module, making external functions as before
   for (const Function &I : M) {
+  std::vector<Type *> ArgTypes;
+  for (const Argument &A : I.args())
+      if (VMap.count(&A) == 0)
+              ArgTypes.push_back(A.getType());
+  if(I.getName() == "add_kernel")
+        ArgTypes.push_back(PointerType::get(New.get()->getContext(), /*AddrSpace=*/0));
+  FunctionType *FTy =
+      FunctionType::get(I.getFunctionType()->getReturnType(), ArgTypes,
+                        I.getFunctionType()->isVarArg());    
     Function *NF =
-        Function::Create(cast<FunctionType>(I.getValueType()), I.getLinkage(),
+        Function::Create(FTy, I.getLinkage(),
                          I.getAddressSpace(), I.getName(), New.get());
     NF->copyAttributesFrom(&I);
     VMap[&I] = NF;
-  }
+  }  
 
   // Loop over the aliases in the module
   for (const GlobalAlias &I : M.aliases()) {
