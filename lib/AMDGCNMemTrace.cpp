@@ -16,8 +16,6 @@
 #include <map>
 #include <system_error>
 
-#define MEM_TRACE_MAGIC  (uint16_t)0xC811
-
 using namespace llvm;
 using namespace std;
 
@@ -97,6 +95,9 @@ std::unique_ptr<Module> CloneModuleAndAddArg(
                        Func.getAddressSpace(), Func.getName(), New.get());
   NF->copyAttributesFrom(&Func);
   VMap[&Func] = NF; 
+  
+  //Get the ptr we just added to the kernel arguments
+ Value *bufferPtr = &*NF->arg_end();
 
 
   // Loop over the aliases in the module
@@ -225,23 +226,35 @@ std::unique_ptr<Module> CloneModuleAndAddArg(
     for (const MDNode *N : NMD.operands())
       NewNMD->addOperand(MapMetadata(N, VMap));
   }
-   std::error_code EC;
-   llvm::raw_fd_ostream OS("module.bc", EC, llvm::sys::fs::OF_None);
-   WriteBitcodeToFile(*New.get(), OS);
-   OS.flush();  
+
+  //Now add the instrumentation function passing in the added ptr kernel argument as the bufferPtr
+//  for (Function::iterator BB = NF.begin(); BB != NF.end(); BB++) {
+//    for (BasicBlock::iterator I = BB->begin(); I != BB->end(); I++) {
+//      if (LoadInst* LI = dyn_cast<LoadInst>(I)) {
+//          InjectInstrumentationFunction<LoadInst>(I, F, M, LocationCounter, bufferPtr);
+//      }
+//      else if(StoreInst* SI = dyn_cast<StoreInst>(I)){
+//          InjectInstrumentationFunction<StoreInst>(I, F, M, LocationCounter, bufferPtr);
+//      }
+//    }
+//  } 
   return New;
 }
-
 
 void AddArg(const Function &F, const llvm::Module &M){
 	ValueToValueMapTy VMap;
 	std::unique_ptr<Module> ClonedModule = CloneModuleAndAddArg(M, VMap, F,  [](const GlobalValue *GV) { return true; });
+	std::string moduleName = F.getName().str() + ".bc";
+   	std::error_code EC;
+   	llvm::raw_fd_ostream OS(moduleName, EC, llvm::sys::fs::OF_None);
+   	WriteBitcodeToFile(*ClonedModule.get(), OS);
+   	OS.flush();	
 	return;	
 }
 
 template <typename LoadOrStoreInst> 
-void InjectingInstrumentationFunction(const BasicBlock::iterator &I, const Function &F, const llvm::Module &M,
-				      uint32_t &LocationCounter){
+void InjectInstrumentationFunction(const BasicBlock::iterator &I, const Function &F, const llvm::Module &M,
+				      uint32_t &LocationCounter, llvm::Value* Ptr){
 	auto &CTX = M.getContext();
 	auto LSI = dyn_cast<LoadOrStoreInst>(I);
 	if (not LSI) return;
@@ -257,17 +270,12 @@ void InjectingInstrumentationFunction(const BasicBlock::iterator &I, const Funct
             (F.getName() + "     " + DL->getFilename() + ":" +
              Twine(DL->getLine()) + ":" + Twine(DL->getColumn()))
                 .str();	
-	
-        Function *InstrumentationFunction = M.getFunction("_Z8memTracePtPvj");
-//	Value *MemTraceMagic = Builder.getInt16(MEM_TRACE_MAGIC);
-   	ConstantInt *Magic = ConstantInt::get(Type::getInt16Ty(CTX), MEM_TRACE_MAGIC);
-    	Constant *MagicPtr =
-        	ConstantExpr::getIntToPtr(Magic, PointerType::getUnqual(CTX));	
-        Builder.CreateCall(FunctionType::get(Type::getVoidTy(CTX), {MagicPtr->getType(), Addr->getType(), Type::getInt32Ty(CTX)} ,false), InstrumentationFunction, {MagicPtr, Addr, LocationCounterVal});
+        Function *InstrumentationFunction = M.getFunction("_Z8memTracePvjS_");
+        Builder.CreateCall(FunctionType::get(Type::getVoidTy(CTX), {Addr->getType(), Type::getInt32Ty(CTX),Ptr->getType()} ,false), InstrumentationFunction, {Addr, LocationCounterVal, Ptr});
         errs() << "Injecting Mem Trace Function Into AMDGPU Kernel: " << SourceInfo
                << "\n";
         errs() << LocationCounter << "     " << SourceInfo <<  "     " << AddrSpaceMap[AddrSpace] << "     " << LoadOrStoreMap(I) << "\n";
-	LocationCounter++;
+	LocationCounter++;	
 }
 
 
@@ -286,29 +294,23 @@ bool AMDGCNMemTrace::runOnModule(Module &M) {
   for (auto &F : M) {
     if(F.isIntrinsic()) continue;
     if (F.getCallingConv() == CallingConv::AMDGPU_KERNEL) {
-//        std::cout << "Found AMDGPU Kernel: " << F.getName().str()
-//                  << std::endl;
-//        errs() << "With Calling Signature: ";
-//        for (auto arg = F.arg_begin(); arg != F.arg_end();
-//             ++arg) {
-//          errs() << *arg;
-//          if (arg != F.arg_end() - 1)
-//            errs() << ", ";
-//        }
-//        errs() << "\n";
+	    AddArg(F, M);
       for (Function::iterator BB = F.begin(); BB != F.end(); BB++) {
         for (BasicBlock::iterator I = BB->begin(); I != BB->end(); I++) {
           if (LoadInst* LI = dyn_cast<LoadInst>(I)) {      
-	      InjectingInstrumentationFunction<LoadInst>(I, F, M, LocationCounter);
+	      PointerType *VoidPtrType = PointerType::getUnqual(CTX);
+	      Constant *NullPtrVal = ConstantPointerNull::get(VoidPtrType);
+	      InjectInstrumentationFunction<LoadInst>(I, F, M, LocationCounter, NullPtrVal);
               ModifiedCodeGen = true;                                                                     
           }
 	  else if(StoreInst* SI = dyn_cast<StoreInst>(I)){
-		  InjectingInstrumentationFunction<StoreInst>(I, F, M, LocationCounter);
+		  PointerType *VoidPtrType = PointerType::getUnqual(CTX);
+		  Constant *NullPtrVal = ConstantPointerNull::get(VoidPtrType);
+		  InjectInstrumentationFunction<StoreInst>(I, F, M, LocationCounter, NullPtrVal);
 		  ModifiedCodeGen = true;
 	  }
         }
       }
-      AddArg(F, M);
   } 
 }
     return ModifiedCodeGen;
