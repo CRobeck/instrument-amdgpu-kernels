@@ -41,6 +41,33 @@ static void copyComdat(GlobalObject *Dst, const GlobalObject *Src) {
   Dst->setComdat(DC);
 }
 
+template <typename LoadOrStoreInst> 
+void InjectInstrumentationFunction(const BasicBlock::iterator &I, const Function &F, const llvm::Module &M,
+				      uint32_t &LocationCounter, llvm::Value* Ptr, bool PrintLocationInfo){
+	auto &CTX = M.getContext();
+	auto LSI = dyn_cast<LoadOrStoreInst>(I);
+	if (not LSI) return;
+	IRBuilder<> Builder(dyn_cast<Instruction>(I));
+	Value *Addr = LSI->getPointerOperand();
+	Value *LocationCounterVal = Builder.getInt32(LocationCounter);
+	Value *Op = LSI->getPointerOperand()->stripPointerCasts();
+        uint32_t AddrSpace =
+                  cast<PointerType>(Op->getType())->getAddressSpace();
+	DILocation *DL = dyn_cast<Instruction>(I)->getDebugLoc();
+
+        std::string SourceInfo =
+            (F.getName() + "     " + DL->getFilename() + ":" +
+             Twine(DL->getLine()) + ":" + Twine(DL->getColumn()))
+                .str();	
+        Function *InstrumentationFunction = M.getFunction("_Z8memTracePvjS_");
+        Builder.CreateCall(FunctionType::get(Type::getVoidTy(CTX), {Addr->getType(), Type::getInt32Ty(CTX),Ptr->getType()} ,false), InstrumentationFunction, {Addr, LocationCounterVal, Ptr});
+	if(PrintLocationInfo){
+        	errs() << "Injecting Mem Trace Function Into AMDGPU Kernel: " << SourceInfo
+        	       << "\n";
+        	errs() << LocationCounter << "     " << SourceInfo <<  "     " << AddrSpaceMap[AddrSpace] << "     " << LoadOrStoreMap(I) << "\n";
+	}
+	LocationCounter++;	
+}
 
 std::unique_ptr<Module> CloneModuleAndAddArg(
     const Module &M, ValueToValueMapTy &VMap, const Function &Func, 
@@ -97,8 +124,9 @@ std::unique_ptr<Module> CloneModuleAndAddArg(
   VMap[&Func] = NF; 
   
   //Get the ptr we just added to the kernel arguments
- Value *bufferPtr = &*NF->arg_end();
-
+  Value *bufferPtr = &*NF->arg_begin() + 4;
+// PointerType *VoidPtrType = PointerType::getUnqual(New.get()->getContext());
+// Constant *bufferPtr = ConstantPointerNull::get(VoidPtrType);
 
   // Loop over the aliases in the module
   for (const GlobalAlias &I : M.aliases()) {
@@ -228,16 +256,17 @@ std::unique_ptr<Module> CloneModuleAndAddArg(
   }
 
   //Now add the instrumentation function passing in the added ptr kernel argument as the bufferPtr
-//  for (Function::iterator BB = NF.begin(); BB != NF.end(); BB++) {
-//    for (BasicBlock::iterator I = BB->begin(); I != BB->end(); I++) {
-//      if (LoadInst* LI = dyn_cast<LoadInst>(I)) {
-//          InjectInstrumentationFunction<LoadInst>(I, F, M, LocationCounter, bufferPtr);
-//      }
-//      else if(StoreInst* SI = dyn_cast<StoreInst>(I)){
-//          InjectInstrumentationFunction<StoreInst>(I, F, M, LocationCounter, bufferPtr);
-//      }
-//    }
-//  } 
+  uint32_t LocationCounter = 0;
+  for (Function::iterator BB = NF->begin(); BB != NF->end(); BB++) {
+    for (BasicBlock::iterator I = BB->begin(); I != BB->end(); I++) {
+      if (LoadInst* LI = dyn_cast<LoadInst>(I)) {
+          InjectInstrumentationFunction<LoadInst>(I, *NF, *New.get(), LocationCounter, bufferPtr, false);
+      }
+      else if(StoreInst* SI = dyn_cast<StoreInst>(I)){
+          InjectInstrumentationFunction<StoreInst>(I, *NF, *New.get(), LocationCounter, bufferPtr, false);
+      }
+    }
+  } 
   return New;
 }
 
@@ -252,31 +281,7 @@ void AddArg(const Function &F, const llvm::Module &M){
 	return;	
 }
 
-template <typename LoadOrStoreInst> 
-void InjectInstrumentationFunction(const BasicBlock::iterator &I, const Function &F, const llvm::Module &M,
-				      uint32_t &LocationCounter, llvm::Value* Ptr){
-	auto &CTX = M.getContext();
-	auto LSI = dyn_cast<LoadOrStoreInst>(I);
-	if (not LSI) return;
-	IRBuilder<> Builder(dyn_cast<Instruction>(I));
-	Value *Addr = LSI->getPointerOperand();
-	Value *LocationCounterVal = Builder.getInt32(LocationCounter);
-	Value *Op = LSI->getPointerOperand()->stripPointerCasts();
-        uint32_t AddrSpace =
-                  cast<PointerType>(Op->getType())->getAddressSpace();
-	DILocation *DL = dyn_cast<Instruction>(I)->getDebugLoc();
 
-        std::string SourceInfo =
-            (F.getName() + "     " + DL->getFilename() + ":" +
-             Twine(DL->getLine()) + ":" + Twine(DL->getColumn()))
-                .str();	
-        Function *InstrumentationFunction = M.getFunction("_Z8memTracePvjS_");
-        Builder.CreateCall(FunctionType::get(Type::getVoidTy(CTX), {Addr->getType(), Type::getInt32Ty(CTX),Ptr->getType()} ,false), InstrumentationFunction, {Addr, LocationCounterVal, Ptr});
-        errs() << "Injecting Mem Trace Function Into AMDGPU Kernel: " << SourceInfo
-               << "\n";
-        errs() << LocationCounter << "     " << SourceInfo <<  "     " << AddrSpaceMap[AddrSpace] << "     " << LoadOrStoreMap(I) << "\n";
-	LocationCounter++;	
-}
 
 
 bool AMDGCNMemTrace::runOnModule(Module &M) {
@@ -300,13 +305,13 @@ bool AMDGCNMemTrace::runOnModule(Module &M) {
           if (LoadInst* LI = dyn_cast<LoadInst>(I)) {      
 	      PointerType *VoidPtrType = PointerType::getUnqual(CTX);
 	      Constant *NullPtrVal = ConstantPointerNull::get(VoidPtrType);
-	      InjectInstrumentationFunction<LoadInst>(I, F, M, LocationCounter, NullPtrVal);
+	      InjectInstrumentationFunction<LoadInst>(I, F, M, LocationCounter, NullPtrVal, true);
               ModifiedCodeGen = true;                                                                     
           }
 	  else if(StoreInst* SI = dyn_cast<StoreInst>(I)){
 		  PointerType *VoidPtrType = PointerType::getUnqual(CTX);
 		  Constant *NullPtrVal = ConstantPointerNull::get(VoidPtrType);
-		  InjectInstrumentationFunction<StoreInst>(I, F, M, LocationCounter, NullPtrVal);
+		  InjectInstrumentationFunction<StoreInst>(I, F, M, LocationCounter, NullPtrVal, true);
 		  ModifiedCodeGen = true;
 	  }
         }
