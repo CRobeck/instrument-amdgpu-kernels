@@ -1,35 +1,37 @@
 #include "AMDGCNMemTrace.h"
 #include "utils.h"
 
+#include "llvm/Bitcode/BitcodeWriter.h"
+#include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/PassManager.h"
-#include "llvm/IR/IRBuilder.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Passes/PassPlugin.h"
-#include "llvm/Support/raw_ostream.h"
-#include "llvm/Support/ToolOutputFile.h"
-#include "llvm/Transforms/Utils/Cloning.h"
-#include "llvm/Bitcode/BitcodeWriter.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/ToolOutputFile.h"
+#include "llvm/Support/raw_ostream.h"
+#include "llvm/Transforms/Utils/Cloning.h"
 #include <iostream>
-#include <vector>
 #include <map>
 #include <system_error>
+#include <vector>
 
 using namespace llvm;
 using namespace std;
 
-std::string InstrumentationFunctionFile = instrumentation::utils::getenv("AMDCGN_INSTRUMENTATION_FUNCTIONS_FILE");
+std::string InstrumentationFunctionFile =
+    instrumentation::utils::getenv("AMDCGN_INSTRUMENTATION_FUNCTIONS_FILE");
 
-std::map<int, std::string> AddrSpaceMap = {{0, "FLAT"},
-					   {1, "GLOBAL"},
-					   {3, "SHARED"},
-					   {4, "CONSTANT"}};
+std::map<int, std::string> AddrSpaceMap = {
+    {0, "FLAT"}, {1, "GLOBAL"}, {3, "SHARED"}, {4, "CONSTANT"}};
 
-std::string LoadOrStoreMap(const BasicBlock::iterator &I){
-		if (LoadInst* LI = dyn_cast<LoadInst>(I)) return "LOAD";
-		else if (StoreInst* SI = dyn_cast<StoreInst>(I)) return "STORE";
-		else throw std::runtime_error("Error: unknown operation type");
+std::string LoadOrStoreMap(const BasicBlock::iterator &I) {
+  if (LoadInst *LI = dyn_cast<LoadInst>(I))
+    return "LOAD";
+  else if (StoreInst *SI = dyn_cast<StoreInst>(I))
+    return "STORE";
+  else
+    throw std::runtime_error("Error: unknown operation type");
 }
 
 static void copyComdat(GlobalObject *Dst, const GlobalObject *Src) {
@@ -41,36 +43,42 @@ static void copyComdat(GlobalObject *Dst, const GlobalObject *Src) {
   Dst->setComdat(DC);
 }
 
-template <typename LoadOrStoreInst> 
-void InjectInstrumentationFunction(const BasicBlock::iterator &I, const Function &F, const llvm::Module &M,
-				      uint32_t &LocationCounter, llvm::Value* Ptr, bool PrintLocationInfo){
-	auto &CTX = M.getContext();
-	auto LSI = dyn_cast<LoadOrStoreInst>(I);
-	if (not LSI) return;
-	IRBuilder<> Builder(dyn_cast<Instruction>(I));
-	Value *Addr = LSI->getPointerOperand();
-	Value *LocationCounterVal = Builder.getInt32(LocationCounter);
-	Value *Op = LSI->getPointerOperand()->stripPointerCasts();
-        uint32_t AddrSpace =
-                  cast<PointerType>(Op->getType())->getAddressSpace();
-	DILocation *DL = dyn_cast<Instruction>(I)->getDebugLoc();
+template <typename LoadOrStoreInst>
+void InjectInstrumentationFunction(const BasicBlock::iterator &I,
+                                   const Function &F, const llvm::Module &M,
+                                   uint32_t &LocationCounter, llvm::Value *Ptr,
+                                   bool PrintLocationInfo) {
+  auto &CTX = M.getContext();
+  auto LSI = dyn_cast<LoadOrStoreInst>(I);
+  if (not LSI)
+    return;
+  IRBuilder<> Builder(dyn_cast<Instruction>(I));
+  Value *Addr = LSI->getPointerOperand();
+  Value *LocationCounterVal = Builder.getInt32(LocationCounter);
+  Value *Op = LSI->getPointerOperand()->stripPointerCasts();
+  uint32_t AddrSpace = cast<PointerType>(Op->getType())->getAddressSpace();
+  DILocation *DL = dyn_cast<Instruction>(I)->getDebugLoc();
 
-        std::string SourceInfo =
-            (F.getName() + "     " + DL->getFilename() + ":" +
-             Twine(DL->getLine()) + ":" + Twine(DL->getColumn()))
-                .str();	
-        Function *InstrumentationFunction = M.getFunction("_Z8memTracePvjS_");
-        Builder.CreateCall(FunctionType::get(Type::getVoidTy(CTX), {Addr->getType(), Type::getInt32Ty(CTX),Ptr->getType()} ,false), InstrumentationFunction, {Addr, LocationCounterVal, Ptr});
-	if(PrintLocationInfo){
-        	errs() << "Injecting Mem Trace Function Into AMDGPU Kernel: " << SourceInfo
-        	       << "\n";
-        	errs() << LocationCounter << "     " << SourceInfo <<  "     " << AddrSpaceMap[AddrSpace] << "     " << LoadOrStoreMap(I) << "\n";
-	}
-	LocationCounter++;	
+  std::string SourceInfo = (F.getName() + "     " + DL->getFilename() + ":" +
+                            Twine(DL->getLine()) + ":" + Twine(DL->getColumn()))
+                               .str();
+  Function *InstrumentationFunction = M.getFunction("_Z8memTracePvjS_");
+  Builder.CreateCall(FunctionType::get(Type::getVoidTy(CTX),
+                                       {Addr->getType(), Type::getInt32Ty(CTX),
+                                        Ptr->getType()},
+                                       false),
+                     InstrumentationFunction, {Addr, LocationCounterVal, Ptr});
+  if (PrintLocationInfo) {
+    errs() << "Injecting Mem Trace Function Into AMDGPU Kernel: " << SourceInfo
+           << "\n";
+    errs() << LocationCounter << "     " << SourceInfo << "     "
+           << AddrSpaceMap[AddrSpace] << "     " << LoadOrStoreMap(I) << "\n";
+  }
+  LocationCounter++;
 }
 
 std::unique_ptr<Module> CloneModuleAndAddArg(
-    const Module &M, ValueToValueMapTy &VMap, const Function &Func, 
+    const Module &M, ValueToValueMapTy &VMap, const Function &Func,
     function_ref<bool(const GlobalValue *)> ShouldCloneDefinition) {
 
   assert(M.isMaterialized() && "Module must be materialized before cloning!");
@@ -97,36 +105,34 @@ std::unique_ptr<Module> CloneModuleAndAddArg(
     VMap[&I] = NewGV;
   }
 
-// Loop over the functions in the module, making external functions as before
+  // Loop over the functions in the module, making external functions as before
   for (const Function &I : M) {
-    if(I.getName() == Func.getName())
-	    continue;
+    if (I.getName() == Func.getName())
+      continue;
     Function *NF =
         Function::Create(cast<FunctionType>(I.getValueType()), I.getLinkage(),
                          I.getAddressSpace(), I.getName(), New.get());
     NF->copyAttributesFrom(&I);
     VMap[&I] = NF;
   }
-  //Add an extra ptr arg on to the instrumented kernels
+  // Add an extra ptr arg on to the instrumented kernels
   std::vector<Type *> ArgTypes;
-  for (auto arg = Func.arg_begin(); arg != Func.arg_end();
-       ++arg) {
+  for (auto arg = Func.arg_begin(); arg != Func.arg_end(); ++arg) {
     ArgTypes.push_back(arg->getType());
   }
-  ArgTypes.push_back(PointerType::get(New.get()->getContext(), /*AddrSpace=*/0));
+  ArgTypes.push_back(
+      PointerType::get(New.get()->getContext(), /*AddrSpace=*/0));
   FunctionType *FTy =
-    FunctionType::get(Func.getFunctionType()->getReturnType(), ArgTypes,
-                      Func.getFunctionType()->isVarArg());    
+      FunctionType::get(Func.getFunctionType()->getReturnType(), ArgTypes,
+                        Func.getFunctionType()->isVarArg());
   Function *NF =
-      Function::Create(FTy, Func.getLinkage(),
-                       Func.getAddressSpace(), Func.getName(), New.get());
+      Function::Create(FTy, Func.getLinkage(), Func.getAddressSpace(),
+                       Func.getName(), New.get());
   NF->copyAttributesFrom(&Func);
-  VMap[&Func] = NF; 
-  
-  //Get the ptr we just added to the kernel arguments
-  Value *bufferPtr = &*NF->arg_begin() + 4;
-// PointerType *VoidPtrType = PointerType::getUnqual(New.get()->getContext());
-// Constant *bufferPtr = ConstantPointerNull::get(VoidPtrType);
+  VMap[&Func] = NF;
+
+  // Get the ptr we just added to the kernel arguments
+  Value *bufferPtr = &*NF->arg_end() - 1;
 
   // Loop over the aliases in the module
   for (const GlobalAlias &I : M.aliases()) {
@@ -255,34 +261,35 @@ std::unique_ptr<Module> CloneModuleAndAddArg(
       NewNMD->addOperand(MapMetadata(N, VMap));
   }
 
-  //Now add the instrumentation function passing in the added ptr kernel argument as the bufferPtr
+  // Now add the instrumentation function passing in the added ptr kernel
+  // argument as the bufferPtr
   uint32_t LocationCounter = 0;
   for (Function::iterator BB = NF->begin(); BB != NF->end(); BB++) {
     for (BasicBlock::iterator I = BB->begin(); I != BB->end(); I++) {
-      if (LoadInst* LI = dyn_cast<LoadInst>(I)) {
-          InjectInstrumentationFunction<LoadInst>(I, *NF, *New.get(), LocationCounter, bufferPtr, false);
-      }
-      else if(StoreInst* SI = dyn_cast<StoreInst>(I)){
-          InjectInstrumentationFunction<StoreInst>(I, *NF, *New.get(), LocationCounter, bufferPtr, false);
+      if (LoadInst *LI = dyn_cast<LoadInst>(I)) {
+        InjectInstrumentationFunction<LoadInst>(
+            I, *NF, *New.get(), LocationCounter, bufferPtr, false);
+      } else if (StoreInst *SI = dyn_cast<StoreInst>(I)) {
+        InjectInstrumentationFunction<StoreInst>(
+            I, *NF, *New.get(), LocationCounter, bufferPtr, false);
       }
     }
-  } 
+  }
   return New;
 }
 
-void AddArg(const Function &F, const llvm::Module &M){
-	ValueToValueMapTy VMap;
-	std::unique_ptr<Module> ClonedModule = CloneModuleAndAddArg(M, VMap, F,  [](const GlobalValue *GV) { return true; });
-	std::string moduleName = F.getName().str() + ".bc";
-   	std::error_code EC;
-   	llvm::raw_fd_ostream OS(moduleName, EC, llvm::sys::fs::OF_None);
-   	WriteBitcodeToFile(*ClonedModule.get(), OS);
-   	OS.flush();	
-	return;	
+void GenerateClonedModuleWithAddedKernelArg(const Function &F,
+                                            const llvm::Module &M) {
+  ValueToValueMapTy VMap;
+  std::unique_ptr<Module> ClonedModule = CloneModuleAndAddArg(
+      M, VMap, F, [](const GlobalValue *GV) { return true; });
+  std::string moduleName = F.getName().str() + ".bc";
+  std::error_code EC;
+  llvm::raw_fd_ostream OS(moduleName, EC, llvm::sys::fs::OF_None);
+  WriteBitcodeToFile(*ClonedModule.get(), OS);
+  OS.flush();
+  return;
 }
-
-
-
 
 bool AMDGCNMemTrace::runOnModule(Module &M) {
   bool ModifiedCodeGen = false;
@@ -290,47 +297,50 @@ bool AMDGCNMemTrace::runOnModule(Module &M) {
   uint32_t LocationCounter = 0;
   std::string errorMsg;
   std::unique_ptr<llvm::Module> InstrumentationModule;
-  if (!loadInstrumentationFile(InstrumentationFunctionFile, CTX, InstrumentationModule, errorMsg)) {
-    printf("error loading program '%s': %s", InstrumentationFunctionFile.c_str(),
-               errorMsg.c_str());
+  if (!loadInstrumentationFile(InstrumentationFunctionFile, CTX,
+                               InstrumentationModule, errorMsg)) {
+    printf("error loading program '%s': %s",
+           InstrumentationFunctionFile.c_str(), errorMsg.c_str());
     exit(1);
   }
-  Linker::linkModules(M, std::move(InstrumentationModule));  
+  Linker::linkModules(M, std::move(InstrumentationModule));
   for (auto &F : M) {
-    if(F.isIntrinsic()) continue;
+    if (F.isIntrinsic())
+      continue;
     if (F.getCallingConv() == CallingConv::AMDGPU_KERNEL) {
-	    AddArg(F, M);
+      GenerateClonedModuleWithAddedKernelArg(F, M);
       for (Function::iterator BB = F.begin(); BB != F.end(); BB++) {
         for (BasicBlock::iterator I = BB->begin(); I != BB->end(); I++) {
-          if (LoadInst* LI = dyn_cast<LoadInst>(I)) {      
-	      PointerType *VoidPtrType = PointerType::getUnqual(CTX);
-	      Constant *NullPtrVal = ConstantPointerNull::get(VoidPtrType);
-	      InjectInstrumentationFunction<LoadInst>(I, F, M, LocationCounter, NullPtrVal, true);
-              ModifiedCodeGen = true;                                                                     
+          if (LoadInst *LI = dyn_cast<LoadInst>(I)) {
+            PointerType *VoidPtrType = PointerType::getUnqual(CTX);
+            Constant *NullPtrVal = ConstantPointerNull::get(VoidPtrType);
+            InjectInstrumentationFunction<LoadInst>(I, F, M, LocationCounter,
+                                                    NullPtrVal, true);
+            ModifiedCodeGen = true;
+          } else if (StoreInst *SI = dyn_cast<StoreInst>(I)) {
+            PointerType *VoidPtrType = PointerType::getUnqual(CTX);
+            Constant *NullPtrVal = ConstantPointerNull::get(VoidPtrType);
+            InjectInstrumentationFunction<StoreInst>(I, F, M, LocationCounter,
+                                                     NullPtrVal, true);
+            ModifiedCodeGen = true;
           }
-	  else if(StoreInst* SI = dyn_cast<StoreInst>(I)){
-		  PointerType *VoidPtrType = PointerType::getUnqual(CTX);
-		  Constant *NullPtrVal = ConstantPointerNull::get(VoidPtrType);
-		  InjectInstrumentationFunction<StoreInst>(I, F, M, LocationCounter, NullPtrVal, true);
-		  ModifiedCodeGen = true;
-	  }
         }
       }
-  } 
-}
-    return ModifiedCodeGen;
+    }
+  }
+  return ModifiedCodeGen;
 }
 
 PassPluginLibraryInfo getPassPluginInfo() {
   const auto callback = [](PassBuilder &PB) {
     PB.registerOptimizerLastEPCallback([&](ModulePassManager &MPM, auto) {
-        MPM.addPass(AMDGCNMemTrace());
+      MPM.addPass(AMDGCNMemTrace());
       return true;
     });
   };
 
-  return {LLVM_PLUGIN_API_VERSION, "amdgcn-mem-trace",
-          LLVM_VERSION_STRING, callback};
+  return {LLVM_PLUGIN_API_VERSION, "amdgcn-mem-trace", LLVM_VERSION_STRING,
+          callback};
 };
 
 extern "C" LLVM_ATTRIBUTE_WEAK PassPluginLibraryInfo llvmGetPassPluginInfo() {
