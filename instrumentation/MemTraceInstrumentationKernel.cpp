@@ -4,6 +4,17 @@
 
 #define WaveFrontSize 64
 
+typedef struct {
+    uint64_t Cycle;
+    uint32_t LocationId;
+    uint32_t WaveId;
+    uint32_t SIMD;
+    uint32_t CU;
+    uint32_t SE;
+    uint32_t XCD;
+    uint64_t addrArray[WaveFrontSize];
+} MemTraceData_t;
+
 __attribute__((always_inline))
 __device__ uint32_t getThreadIdInBlock() { return __builtin_amdgcn_workitem_id_x(); }
 
@@ -30,6 +41,7 @@ __device__ void memTrace(void* addressPtr, uint32_t LocationId, void* bufferPtr)
   if(Lane == firstActiveLane){
 	unsigned int hw_id = 0;
 	uint64_t Time = 0;
+	unsigned int xcc_id = 0;
 #if !defined(__gfx1100__) && !defined(__gfx1101__)
 	Time = __builtin_amdgcn_s_memrealtime();
 	asm volatile("s_getreg_b32 %0, hwreg(HW_REG_HW_ID)" : "=s"(hw_id));
@@ -37,7 +49,6 @@ __device__ void memTrace(void* addressPtr, uint32_t LocationId, void* bufferPtr)
 if (!bufferPtr){
 //TODO: make this cleaner
 #if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)	
-	unsigned int xcc_id;
 	asm volatile("s_getreg_b32 %0, hwreg(HW_REG_XCC_ID)" : "=s"(xcc_id));
 	printf("CYCLE: %ld, LocationId %d, Wave %d, SIMD %d, CU %d, SE %d, XCD %d, MEMTRACE: "
 	       "0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,"
@@ -62,5 +73,17 @@ if (!bufferPtr){
 	       addrArray[48], addrArray[49], addrArray[50], addrArray[51], addrArray[52], addrArray[53], addrArray[54], addrArray[55], addrArray[56], addrArray[57], addrArray[58], addrArray[59], addrArray[60], addrArray[61], addrArray[62], addrArray[63]);	  
 #endif
   }
+else{
+	MemTraceData_t MemTraceData;
+    	MemTraceData.Cycle = Time;
+    	MemTraceData.LocationId = LocationId;
+    	MemTraceData.WaveId = hw_id & 0xf;;
+    	MemTraceData.SIMD = (hw_id & 0x30) >> 4;
+    	MemTraceData.CU = (hw_id & 0xf00) >> 8;
+	MemTraceData.SE = (hw_id & 0xe000) >> 13;
+    	MemTraceData.XCD = xcc_id;
+	for (int i = 0; i < WaveFrontSize; i++)
+		MemTraceData.addrArray[i] = addrArray[i];	
+}
 }
 }
