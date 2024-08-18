@@ -57,6 +57,8 @@ void InjectInstrumentationFunction(const BasicBlock::iterator &I,
   Value *LocationCounterVal = Builder.getInt32(LocationCounter);
   Value *Op = LSI->getPointerOperand()->stripPointerCasts();
   uint32_t AddrSpace = cast<PointerType>(Op->getType())->getAddressSpace();
+  //Skip shared and constant memory address spaces for now
+  if(AddrSpace == 3 || AddrSpace == 4) return;  
   DILocation *DL = dyn_cast<Instruction>(I)->getDebugLoc();
 
   std::string SourceInfo = (F.getName() + "     " + DL->getFilename() + ":" +
@@ -294,7 +296,6 @@ void GenerateClonedModuleWithAddedKernelArg(const Function &F,
 bool AMDGCNMemTrace::runOnModule(Module &M) {
   bool ModifiedCodeGen = false;
   auto &CTX = M.getContext();
-  uint32_t LocationCounter = 0;
   std::string errorMsg;
   std::unique_ptr<llvm::Module> InstrumentationModule;
   if (!loadInstrumentationFile(InstrumentationFunctionFile, CTX,
@@ -308,6 +309,7 @@ bool AMDGCNMemTrace::runOnModule(Module &M) {
     if (F.isIntrinsic())
       continue;
     if (F.getCallingConv() == CallingConv::AMDGPU_KERNEL) {
+      uint32_t LocationCounter = 0;
       GenerateClonedModuleWithAddedKernelArg(F, M);
       for (Function::iterator BB = F.begin(); BB != F.end(); BB++) {
         for (BasicBlock::iterator I = BB->begin(); I != BB->end(); I++) {

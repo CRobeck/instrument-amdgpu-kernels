@@ -23,9 +23,16 @@ __attribute__((always_inline)) __device__ uint32_t getWaveId() {
   return getThreadIdInBlock() / WaveFrontSize;
 }
 
+__attribute__((always_inline))
+ __device__ bool isSharedMemPtr(const void *Ptr) {
+  return __builtin_amdgcn_is_shared(
+      (const __attribute__((address_space(0))) void *)Ptr);
+}
+
 __attribute__((used)) __device__ void
 memTrace(void *addressPtr, uint32_t LocationId, void *bufferPtr) {
-
+ if(isSharedMemPtr(addressPtr))
+   return;
   uint64_t address = reinterpret_cast<uint64_t>(addressPtr);
   // Mask of the active threads in the wave
   int activeMask = __builtin_amdgcn_read_exec();
