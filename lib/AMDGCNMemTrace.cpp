@@ -32,10 +32,11 @@ void InjectingInstrumentationFunction(const BasicBlock::iterator &I, const Funct
 	if (not LSI) return;
 	IRBuilder<> Builder(dyn_cast<Instruction>(I));
 	Value *Addr = LSI->getPointerOperand();
-	Value *LocationCounterVal = Builder.getInt32(LocationCounter);
 	Value *Op = LSI->getPointerOperand()->stripPointerCasts();
         uint32_t AddrSpace =
                   cast<PointerType>(Op->getType())->getAddressSpace();
+	//Skip shared and constant memory address spaces for now
+	if(AddrSpace == 3 || AddrSpace == 4) return;
 	DILocation *DL = dyn_cast<Instruction>(I)->getDebugLoc();
 
         std::string SourceInfo =
@@ -44,7 +45,7 @@ void InjectingInstrumentationFunction(const BasicBlock::iterator &I, const Funct
                 .str();	
 	
         Function *InstrumentationFunction = M.getFunction("_Z8memTracePvj");
-        Builder.CreateCall(FunctionType::get(Type::getVoidTy(CTX), {Addr->getType(), Type::getInt32Ty(CTX)} ,false), InstrumentationFunction, {Addr, LocationCounterVal});
+        Builder.CreateCall(FunctionType::get(Type::getVoidTy(CTX), {Addr->getType(), Type::getInt32Ty(CTX)} ,false), InstrumentationFunction, {Addr, Builder.getInt32(LocationCounter)});
         errs() << "Injecting Mem Trace Function Into AMDGPU Kernel: " << SourceInfo
                << "\n";
         errs() << LocationCounter << "     " << SourceInfo <<  "     " << AddrSpaceMap[AddrSpace] << "     " << LoadOrStoreMap(I) << "\n";
