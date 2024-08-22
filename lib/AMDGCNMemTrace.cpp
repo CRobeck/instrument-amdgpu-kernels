@@ -9,6 +9,8 @@
 #include "llvm/Support/raw_ostream.h"
 #include <iostream>
 #include <vector>
+#include <sstream>
+#include <iomanip> 
 #include <map>
 
 using namespace llvm;
@@ -19,6 +21,9 @@ std::map<int, std::string> AddrSpaceMap = {{0, "FLAT"},
 					   {1, "GLOBAL"},
 					   {3, "SHARED"},
 					   {4, "CONSTANT"}};
+
+std::map<std::string, uint32_t> LocationCounterSourceMap;
+
 std::string LoadOrStoreMap(const BasicBlock::iterator &I){
 		if (LoadInst* LI = dyn_cast<LoadInst>(I)) return "LOAD";
 		else if (StoreInst* SI = dyn_cast<StoreInst>(I)) return "STORE";
@@ -39,17 +44,19 @@ void InjectingInstrumentationFunction(const BasicBlock::iterator &I, const Funct
 	if(AddrSpace == 3 || AddrSpace == 4) return;
 	DILocation *DL = dyn_cast<Instruction>(I)->getDebugLoc();
 
-        std::string SourceInfo =
+        std::string SourceAndAddrSpaceInfo =
             (F.getName() + "     " + DL->getFilename() + ":" +
              Twine(DL->getLine()) + ":" + Twine(DL->getColumn()))
-                .str();	
+                .str() + "     " + AddrSpaceMap[AddrSpace] + "     " + LoadOrStoreMap(I);
+
+	if(LocationCounterSourceMap.find(SourceAndAddrSpaceInfo) == LocationCounterSourceMap.end()){
+		errs() << LocationCounter << "     " << SourceAndAddrSpaceInfo << "\n";
+		LocationCounterSourceMap[SourceAndAddrSpaceInfo]=LocationCounter;
+		LocationCounter++;
+	}
 	
         Function *InstrumentationFunction = M.getFunction("_Z8memTracePvj");
-        Builder.CreateCall(FunctionType::get(Type::getVoidTy(CTX), {Addr->getType(), Type::getInt32Ty(CTX)} ,false), InstrumentationFunction, {Addr, Builder.getInt32(LocationCounter)});
-        errs() << "Injecting Mem Trace Function Into AMDGPU Kernel: " << SourceInfo
-               << "\n";
-        errs() << LocationCounter << "     " << SourceInfo <<  "     " << AddrSpaceMap[AddrSpace] << "     " << LoadOrStoreMap(I) << "\n";
-	LocationCounter++;
+        Builder.CreateCall(FunctionType::get(Type::getVoidTy(CTX), {Addr->getType(), Type::getInt32Ty(CTX)} ,false), InstrumentationFunction, {Addr, Builder.getInt32(LocationCounterSourceMap[SourceAndAddrSpaceInfo])});
 }
 
 
