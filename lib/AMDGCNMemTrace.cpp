@@ -280,7 +280,7 @@ std::unique_ptr<Module> CloneModuleAndAddArg(
   return New;
 }
 
-void GenerateClonedModuleWithAddedKernelArg(const Function &F,
+std::unique_ptr<Module> GenerateClonedModuleWithAddedKernelArg(const Function &F,
                                             const llvm::Module &M) {
   ValueToValueMapTy VMap;
   std::unique_ptr<Module> ClonedModule = CloneModuleAndAddArg(
@@ -290,7 +290,7 @@ void GenerateClonedModuleWithAddedKernelArg(const Function &F,
   llvm::raw_fd_ostream OS(moduleName, EC, llvm::sys::fs::OF_None);
   WriteBitcodeToFile(*ClonedModule.get(), OS);
   OS.flush();
-  return;
+  return ClonedModule;
 }
 
 bool AMDGCNMemTrace::runOnModule(Module &M) {
@@ -298,6 +298,8 @@ bool AMDGCNMemTrace::runOnModule(Module &M) {
   auto &CTX = M.getContext();
   std::string errorMsg;
   std::unique_ptr<llvm::Module> InstrumentationModule;
+  std::unique_ptr<llvm::Module> AugmentedModule;
+  std::vector<Function*> GpuKernels;
   if (!loadInstrumentationFile(InstrumentationFunctionFile, CTX,
                                InstrumentationModule, errorMsg)) {
     printf("error loading program '%s': %s",
@@ -309,8 +311,9 @@ bool AMDGCNMemTrace::runOnModule(Module &M) {
     if (F.isIntrinsic())
       continue;
     if (F.getCallingConv() == CallingConv::AMDGPU_KERNEL) {
+      GpuKernels.push_back(&F);
       uint32_t LocationCounter = 0;
-      GenerateClonedModuleWithAddedKernelArg(F, M);
+      AugmentedModule = GenerateClonedModuleWithAddedKernelArg(F, M);
       for (Function::iterator BB = F.begin(); BB != F.end(); BB++) {
         for (BasicBlock::iterator I = BB->begin(); I != BB->end(); I++) {
           if (LoadInst *LI = dyn_cast<LoadInst>(I)) {
@@ -330,6 +333,31 @@ bool AMDGCNMemTrace::runOnModule(Module &M) {
       }
     }
   }
+//  for (auto &I : GpuKernels) {
+//	Function* AugmentedKernel = AugmentedModule->getFunction(I->getName());
+//    std::string AugmentedName = I->getName().str() + "Pv";
+//    ValueToValueMapTy VMap;	
+//    Function *NF =
+//        Function::Create(cast<FunctionType>(I->getValueType()), I->getLinkage(),
+//                         I->getAddressSpace(), AugmentedName, &M);    
+//    NF->copyAttributesFrom(I);
+//    VMap[I] = NF;
+//    Function *F = cast<Function>(VMap[I]);
+//
+//    Function::arg_iterator DestI = F->arg_begin();
+//    for (const Argument &J : I->args()) {
+//      DestI->setName(J.getName());
+//      VMap[&J] = &*DestI++;
+//    }
+//    SmallVector<ReturnInst *, 8> Returns; // Ignore returns cloned.
+//    CloneFunctionInto(F, I, VMap, CloneFunctionChangeType::GlobalChanges,
+//                      Returns);
+////
+////    if (I.hasPersonalityFn())
+////      F->setPersonalityFn(MapValue(I.getPersonalityFn(), VMap));
+////
+////    copyComdat(F, &I);    
+//  }
   return ModifiedCodeGen;
 }
 
