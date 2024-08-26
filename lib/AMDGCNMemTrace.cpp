@@ -333,31 +333,31 @@ bool AMDGCNMemTrace::runOnModule(Module &M) {
       }
     }
   }
-//  for (auto &I : GpuKernels) {
-//	Function* AugmentedKernel = AugmentedModule->getFunction(I->getName());
-//    std::string AugmentedName = I->getName().str() + "Pv";
-//    ValueToValueMapTy VMap;	
-//    Function *NF =
-//        Function::Create(cast<FunctionType>(I->getValueType()), I->getLinkage(),
-//                         I->getAddressSpace(), AugmentedName, &M);    
-//    NF->copyAttributesFrom(I);
-//    VMap[I] = NF;
-//    Function *F = cast<Function>(VMap[I]);
+  for (auto &I : GpuKernels) {
+	Function* AugmentedKernel = AugmentedModule->getFunction(I->getName());
+    std::string AugmentedName = I->getName().str() + "Pv";
+    ValueToValueMapTy VMap;	
+    Function *NF =
+        Function::Create(cast<FunctionType>(I->getValueType()), I->getLinkage(),
+                         I->getAddressSpace(), AugmentedName, &M);    
+    NF->copyAttributesFrom(I);
+    VMap[I] = NF;
+    Function *F = cast<Function>(VMap[I]);
+
+    Function::arg_iterator DestI = F->arg_begin();
+    for (const Argument &J : I->args()) {
+      DestI->setName(J.getName());
+      VMap[&J] = &*DestI++;
+    }
+    SmallVector<ReturnInst *, 8> Returns; // Ignore returns cloned.
+    CloneFunctionInto(F, I, VMap, CloneFunctionChangeType::GlobalChanges,
+                      Returns);
 //
-//    Function::arg_iterator DestI = F->arg_begin();
-//    for (const Argument &J : I->args()) {
-//      DestI->setName(J.getName());
-//      VMap[&J] = &*DestI++;
-//    }
-//    SmallVector<ReturnInst *, 8> Returns; // Ignore returns cloned.
-//    CloneFunctionInto(F, I, VMap, CloneFunctionChangeType::GlobalChanges,
-//                      Returns);
-////
-////    if (I.hasPersonalityFn())
-////      F->setPersonalityFn(MapValue(I.getPersonalityFn(), VMap));
-////
-////    copyComdat(F, &I);    
-//  }
+//    if (I.hasPersonalityFn())
+//      F->setPersonalityFn(MapValue(I.getPersonalityFn(), VMap));
+//
+//    copyComdat(F, &I);    
+  }
   return ModifiedCodeGen;
 }
 
