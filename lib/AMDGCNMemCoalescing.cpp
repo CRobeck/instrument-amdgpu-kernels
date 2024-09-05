@@ -81,8 +81,8 @@ bool AMDGCNMemCoalescing::runOnModule(Module &M) {
                       .str();
 
               Type* dataType = LI->getType();
-              DataLayout* dl = new DataLayout(&M);
-              uint32_t typeSize = dl->getTypeStoreSize(dataType); 
+	      const DataLayout dl = M.getDataLayout();
+              uint32_t typeSize = dl.getTypeStoreSize(dataType); 
               Value *typeSizeVal = Builder.getInt32(typeSize);
               Function *InstrumentationFunction = M.getFunction("_Z13numCacheLinesPvjj");
               Builder.CreateCall(FunctionType::get(Type::getVoidTy(CTX), {Addr->getType(), Type::getInt32Ty(CTX), Type::getInt32Ty(CTX)} ,false), InstrumentationFunction, {Addr, TtraceCounterIntVal, typeSizeVal});
