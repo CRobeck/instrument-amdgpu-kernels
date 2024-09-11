@@ -37,9 +37,10 @@ foreach( plugin ${AMDGCN_INSTRUMENTATION_PASSES} )
 
     target_link_libraries(
       ${plugin}
-#      LLVMCore
-#      LLVMIRReader
-#      LLVMLinker
+      PRIVATE
+      LLVMCore
+      LLVMIRReader
+      LLVMLinker
       "$<$<PLATFORM_ID:Darwin>:-undefined dynamic_lookup>"
       )
 endforeach()
