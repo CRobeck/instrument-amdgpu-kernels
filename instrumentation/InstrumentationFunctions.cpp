@@ -3,6 +3,7 @@
 #include <stdio.h>
 
 #define WarpSize 32
+#define WaveFrontSize 64
 
 __attribute__((used)) 
 __attribute__((always_inline))
@@ -13,8 +14,8 @@ __device__ void PrintCacheLines(uint32_t idx) {
 }
 
 __attribute__((always_inline))
-__device__ int getNthBit(uint32_t bitArray, int nth){
-  return 1 & (bitArray >> nth);
+__device__ int isThreadActive(uint32_t activeMaskArray, int i){
+  return 1 & (activeMaskArray >> i);
 }
 
 __attribute__((always_inline))
@@ -38,18 +39,18 @@ __attribute__((used)) __device__ uint32_t numCacheLines(void* addressPtr, uint32
 
   uint64_t address = reinterpret_cast<uint64_t>(addressPtr);
 
-  uint64_t addrArray[2 * WarpSize];
+  uint64_t addrArray[WaveFrontSize];
 
   int baseThread = -1;
-  for(int i = 0; i < WarpSize; i++)
-    if(getNthBit(activeThreadMask, i) == 1){
+  for(int i = 0; i < WaveFrontSize; i++)
+    if(isThreadActive(activeThreadMask, i) == 1){
       baseThread = i;
       break;
     }
 
   // Shuffle values from all threads into addrArray using active threads
   for(int i = 0; i < WarpSize; i++){
-    if(getNthBit(activeThreadMask, i) == 0)
+    if(isThreadActive(activeThreadMask, i) == 0)
       addrArray[2 * i] = address;
     else{
       addrArray[2 * i] = __shfl(address, i, WarpSize);
@@ -67,11 +68,11 @@ __attribute__((used)) __device__ uint32_t numCacheLines(void* addressPtr, uint32
     }
 
     uint64_t baseAddr = addrArray[0];
-    for(int i = 0; i < 2 * WarpSize; i++)
+    for(int i = 0; i < WaveFrontSize; i++)
       if(addrArray[i] != baseAddr){
         uint64_t current = addrArray[i];
         NumCacheLines++;
-        for(int j = i + 1; j < 2 * WarpSize; j++)
+        for(int j = i + 1; j < WaveFrontSize; j++)
           if(addrArray[j] == current)
             addrArray[j] = baseAddr;
       }
