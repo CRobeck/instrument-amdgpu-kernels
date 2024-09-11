@@ -1,5 +1,5 @@
-#ifndef INJECT_AMDGCN_MEM_COALESCING_H
-#define INJECT_AMDGCN_MEM_COALESCING_H
+#ifndef INJECT_AMDGCN_NUM_CACHELINES_H
+#define INJECT_AMDGCN_NUM_CACHELINES_H
 
 #include "llvm/IR/PassManager.h"
 #include "llvm/Pass.h"
@@ -9,7 +9,7 @@ using namespace llvm;
 
 namespace {
 
-struct AMDGCNMemCoalescing : public PassInfoMixin<AMDGCNMemCoalescing> {
+struct AMDGCNNumCacheLines : public PassInfoMixin<AMDGCNNumCacheLines> {
   PreservedAnalyses run(Module &M, ModuleAnalysisManager &) {
     bool Changed = runOnModule(M);
 

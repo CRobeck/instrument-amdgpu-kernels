@@ -15,7 +15,7 @@ __attribute__((always_inline))
       (const __attribute__((address_space(0))) void *)Ptr);
 }
 
-__attribute__((used)) __device__ void numCacheLines(void* addressPtr, uint32_t LoadOrStore, uint32_t LocationIdx, uint32_t typeSize){
+__attribute__((used)) __device__ void numCacheLines(void* addressPtr, uint32_t LocationIdx, uint32_t typeSize){
   uint32_t NumCacheLines = 1;
  //TODO: See if this is check is actually needed since we're already checking for addresspace 3 or 4
  //in the compiler pass before injecting this function
@@ -64,6 +64,6 @@ __attribute__((used)) __device__ void numCacheLines(void* addressPtr, uint32_t L
             addrArray[j] = baseAddr;
       }
   if(NumCacheLines>1)
-  	printf("Number of Cache Lines Used at Location %d: %d", LocationIdx, NumCacheLines);
+  	printf("Number of Cache Lines Used at Location %d: %d\n", LocationIdx, NumCacheLines);
   }
 }

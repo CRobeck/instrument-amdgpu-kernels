@@ -1,4 +1,4 @@
-#include "AMDGCNMemCoalescing.h"
+#include "AMDGCNNumCacheLines.h"
 #include "utils.h"
 
 #include "llvm/Bitcode/BitcodeWriter.h"
@@ -19,7 +19,7 @@
 using namespace llvm;
 using namespace std;
 
-bool AMDGCNMemCoalescing::runOnModule(Module &M) {
+bool AMDGCNNumCacheLines::runOnModule(Module &M) {
   bool ModifiedCodeGen = false;
   auto &CTX = M.getContext();
   uint32_t TtraceCounterInt = 1;
@@ -49,13 +49,13 @@ bool AMDGCNMemCoalescing::runOnModule(Module &M) {
                       .str();
 
               Type* dataType = LI->getType();
-              DataLayout* dl = new DataLayout(&M);
-              uint32_t typeSize = dl->getTypeStoreSize(dataType); 
+	      	  const DataLayout dl = M.getDataLayout();
+              uint32_t typeSize = dl.getTypeStoreSize(dataType); 
               Value *typeSizeVal = Builder.getInt32(typeSize);
               FunctionType *FT = FunctionType::get(Type::getVoidTy(CTX), {Addr->getType(), Type::getInt32Ty(CTX), Type::getInt32Ty(CTX)}, false);
               FunctionCallee InstrumentationFunction = M.getOrInsertFunction("_Z13numCacheLinesPvjj", FT);
 			  Builder.CreateCall(InstrumentationFunction, {Addr, TtraceCounterIntVal, typeSizeVal});
-              errs() << "Injecting Mem Coalescing Function Into AMDGPU Kernel: " << UnmangledName
+              errs() << "Injecting Num Cache Lines Function Into AMDGPU Kernel: " << UnmangledName
                      << "\n";                     
               errs() << TtraceCounterInt << "     " << SourceInfo << "\n";
               TtraceCounterInt++;   
@@ -71,12 +71,12 @@ bool AMDGCNMemCoalescing::runOnModule(Module &M) {
 PassPluginLibraryInfo getPassPluginInfo() {
   const auto callback = [](PassBuilder &PB) {
     PB.registerOptimizerLastEPCallback([&](ModulePassManager &MPM, auto) {
-        MPM.addPass(AMDGCNMemCoalescing());
+        MPM.addPass(AMDGCNNumCacheLines());
       return true;
     });
   };
 
-  return {LLVM_PLUGIN_API_VERSION, "amdgcn-mem-coalescing",
+  return {LLVM_PLUGIN_API_VERSION, "amdgcn-num-cache-lines",
           LLVM_VERSION_STRING, callback};
 };
 

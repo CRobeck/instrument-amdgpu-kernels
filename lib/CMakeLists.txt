@@ -1,8 +1,8 @@
 set(AMDGCN_INSTRUMENTATION_PASSES
-	  InjectAMDGCNFunction
+	InjectAMDGCNFunction
     InjectAMDGCNInlineASM
     InjectAMDGCNSharedMemTtrace
-    AMDGCNMemCoalescing
+    AMDGCNNumCacheLines
     AMDGCNMemTrace
     )
 
@@ -15,8 +15,8 @@ set(InjectAMDGCNInlineASM_SOURCES
 set(InjectAMDGCNSharedMemTtrace_SOURCES
     InjectAMDGCNSharedMemTtrace.cpp)
 
-set(AMDGCNMemCoalescing_SOURCES
-  AMDGCNMemCoalescing.cpp)
+set(AMDGCNNumCacheLines_SOURCES
+    AMDGCNNumCacheLines.cpp)
 
 set(AMDGCNMemTrace_SOURCES
 	AMDGCNMemTrace.cpp)
@@ -37,9 +37,9 @@ foreach( plugin ${AMDGCN_INSTRUMENTATION_PASSES} )
 
     target_link_libraries(
       ${plugin}
-      LLVMCore
-      LLVMIRReader
-      LLVMLinker
+#      LLVMCore
+#      LLVMIRReader
+#      LLVMLinker
       "$<$<PLATFORM_ID:Darwin>:-undefined dynamic_lookup>"
       )
 endforeach()

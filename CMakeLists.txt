@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 project(InstrumentAMDGPUKernel LANGUAGES C CXX)
 
-#find_package(hip REQUIRED)
 
 set(LLVM_INSTALL_DIR "" CACHE PATH "LLVM installation directory")
 
@@ -99,6 +98,8 @@ if (${BUILD_TESTING})
 
 	include(CTest)
 	enable_testing()
+
+	find_package(hip REQUIRED)
 	add_subdirectory(tests)
 endif()
 

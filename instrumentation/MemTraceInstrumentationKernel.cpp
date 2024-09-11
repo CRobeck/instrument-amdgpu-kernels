@@ -3,6 +3,7 @@
 #include <stdio.h>
 
 #define WaveFrontSize 64
+#define HexLen 15
 
 __attribute__((always_inline))
 __device__ uint32_t getThreadIdInBlock() { return __builtin_amdgcn_workitem_id_x(); }
@@ -11,15 +12,20 @@ __attribute__((always_inline))
 __device__ uint32_t getWaveId() {
   return getThreadIdInBlock() / WaveFrontSize;
 }
+__attribute__((always_inline))
+ __device__ bool isSharedMemPtr(const void *Ptr) {
+  return __builtin_amdgcn_is_shared(
+      (const __attribute__((address_space(0))) void *)Ptr);
+}
 
 __attribute__((used))
-__device__ void memTrace(void* addressPtr, uint32_t LocationId)
-{
-
+__device__ void memTrace(void* addressPtr, uint32_t LocationId){
+ if(isSharedMemPtr(addressPtr))
+   return;
   uint64_t address = reinterpret_cast<uint64_t>(addressPtr);
   //Mask of the active threads in the wave
   int activeMask = __builtin_amdgcn_read_exec();
-  //Find first active thread in the wave by finding the position of the least significant bit set to 1 in the activeMask
+//  //Find first active thread in the wave by finding the position of the least significant bit set to 1 in the activeMask
   const int firstActiveLane = __ffs(activeMask) - 1;
   uint64_t addrArray[WaveFrontSize];
   for(int i = 0; i < WaveFrontSize; i++){
@@ -30,38 +36,39 @@ __device__ void memTrace(void* addressPtr, uint32_t LocationId)
   if(Lane == firstActiveLane){
 	unsigned int hw_id = 0;
 	uint64_t Time = 0;
-#if !defined(__gfx1100__) && !defined(__gfx1101__)
-	Time = __builtin_amdgcn_s_memrealtime();
+#if !defined(__gfx1100__) && !defined(__gfx1101__)	
+	Time = __builtin_amdgcn_s_memrealtime();	
 	asm volatile("s_getreg_b32 %0, hwreg(HW_REG_HW_ID)" : "=s"(hw_id));
-#endif
-
-//TODO: make this cleaner
+#endif	
+	char hex_str[]= "0123456789abcdef";
+	char out[WaveFrontSize*HexLen + 1];
+	(out)[WaveFrontSize*HexLen] = '\0';
+	for (size_t i = 0; i < WaveFrontSize; i++) {
+	        (out)[i * HexLen + 0] = '0';
+                (out)[i * HexLen + 1] = 'x';
+		(out)[i * HexLen + 2] = hex_str[(addrArray[i] >> 44) & 0x0F];
+		(out)[i * HexLen + 3] = hex_str[(addrArray[i] >> 40) & 0x0F];
+		(out)[i * HexLen + 4] = hex_str[(addrArray[i] >> 36) & 0x0F];
+		(out)[i * HexLen + 5] = hex_str[(addrArray[i] >> 32) & 0x0F];
+		(out)[i * HexLen + 6] = hex_str[(addrArray[i] >> 28) & 0x0F];
+		(out)[i * HexLen + 7] = hex_str[(addrArray[i] >> 24) & 0x0F];
+		(out)[i * HexLen + 8] = hex_str[(addrArray[i] >> 20) & 0x0F];
+		(out)[i * HexLen + 9] = hex_str[(addrArray[i] >> 16) & 0x0F];
+		(out)[i * HexLen + 10] = hex_str[(addrArray[i] >> 12) & 0x0F];
+		(out)[i * HexLen + 11] = hex_str[(addrArray[i] >> 8) & 0x0F];
+		(out)[i * HexLen + 12] = hex_str[(addrArray[i] >> 4) & 0x0F];
+      		(out)[i * HexLen + 13] = hex_str[(addrArray[i]     ) & 0x0F];
+		(out)[i * HexLen + 14] = ',';
+	}
+	(out)[WaveFrontSize * HexLen - 1] = '\n';
 #if defined(__gfx940__) || defined(__gfx941__) || defined(__gfx942__)	
 	unsigned int xcc_id;
 	asm volatile("s_getreg_b32 %0, hwreg(HW_REG_XCC_ID)" : "=s"(xcc_id));
-	printf("CYCLE: %ld, LocationId %d, Wave %d, SIMD %d, CU %d, SE %d, XCD %d, MEMTRACE: "
-	       "0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,"
-	       "0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,"
-	       "0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,"
-	       "0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx\n", 
-	       Time, LocationId, (hw_id & 0xf), ((hw_id & 0x30) >> 4), ((hw_id & 0xf00) >> 8), ((hw_id & 0xe000) >> 13), xcc_id, 
-	       addrArray[0],   addrArray[1], addrArray[2],  addrArray[3],  addrArray[4],  addrArray[5],  addrArray[6],  addrArray[7],  addrArray[8],  addrArray[9],  addrArray[10], addrArray[11], addrArray[12], addrArray[13], addrArray[14], addrArray[15],
-	       addrArray[16], addrArray[17], addrArray[18], addrArray[19], addrArray[20], addrArray[21], addrArray[22], addrArray[23], addrArray[24], addrArray[25], addrArray[26], addrArray[27], addrArray[28], addrArray[29], addrArray[30], addrArray[31],
-	       addrArray[32], addrArray[33], addrArray[34], addrArray[35], addrArray[36], addrArray[37], addrArray[38], addrArray[39], addrArray[40], addrArray[41], addrArray[42], addrArray[43], addrArray[44], addrArray[45], addrArray[46], addrArray[47],
-	       addrArray[48], addrArray[49], addrArray[50], addrArray[51], addrArray[52], addrArray[53], addrArray[54], addrArray[55], addrArray[56], addrArray[57], addrArray[58], addrArray[59], addrArray[60], addrArray[61], addrArray[62], addrArray[63]);	  
-
+	printf("%ld,%d,%d,%d,%d,%d,%d, %s", Time, LocationId, (hw_id & 0xf), ((hw_id & 0x30) >> 4), ((hw_id & 0xf00) >> 8), ((hw_id & 0xe000) >> 13), xcc_id, out);
 #else
-	printf("CYCLE: %ld, LocationId %d, Wave %d, SIMD %d, CU %d, SE %d, MEMTRACE: "
-	       "0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,"
-	       "0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,"
-	       "0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,"
-	       "0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx,  0x%lx\n", 
-	       Time, LocationId, (hw_id & 0xf), ((hw_id & 0x30) >> 4), ((hw_id & 0xf00) >> 8), ((hw_id & 0xe000) >> 13),
-	       addrArray[0],   addrArray[1], addrArray[2],  addrArray[3],  addrArray[4],  addrArray[5],  addrArray[6],  addrArray[7],  addrArray[8],  addrArray[9],  addrArray[10], addrArray[11], addrArray[12], addrArray[13], addrArray[14], addrArray[15],
-	       addrArray[16], addrArray[17], addrArray[18], addrArray[19], addrArray[20], addrArray[21], addrArray[22], addrArray[23], addrArray[24], addrArray[25], addrArray[26], addrArray[27], addrArray[28], addrArray[29], addrArray[30], addrArray[31],
-	       addrArray[32], addrArray[33], addrArray[34], addrArray[35], addrArray[36], addrArray[37], addrArray[38], addrArray[39], addrArray[40], addrArray[41], addrArray[42], addrArray[43], addrArray[44], addrArray[45], addrArray[46], addrArray[47],
-	       addrArray[48], addrArray[49], addrArray[50], addrArray[51], addrArray[52], addrArray[53], addrArray[54], addrArray[55], addrArray[56], addrArray[57], addrArray[58], addrArray[59], addrArray[60], addrArray[61], addrArray[62], addrArray[63]);	  
-#endif
+	printf("%ld,%d,%d,%d,%d,%d,%s", Time, LocationId, (hw_id & 0xf), ((hw_id & 0x30) >> 4), ((hw_id & 0xf00) >> 8), ((hw_id & 0xe000) >> 13),out);
+#endif	
+
   }
 }
 
