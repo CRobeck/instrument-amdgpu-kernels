@@ -4,6 +4,7 @@
 
 #define WarpSize 32
 #define WaveFrontSize 64
+#define cacheLineSize 128
 
 __attribute__((used)) 
 __attribute__((always_inline))
@@ -35,46 +36,45 @@ __attribute__((used)) __device__ uint32_t numCacheLines(void* addressPtr, uint32
  if(isSharedMemPtr(addressPtr))
    return NumCacheLines;
 
-  int activeThreadMask =__ballot(1);
+  int activeThreadMask  = __builtin_amdgcn_read_exec();
 
   uint64_t address = reinterpret_cast<uint64_t>(addressPtr);
 
-  uint64_t addrArray[WaveFrontSize];
+  uint64_t addrArray[2 * WarpSize];
 
-  int baseThread = -1;
-  for(int i = 0; i < WaveFrontSize; i++)
-    if(isThreadActive(activeThreadMask, i) == 1){
-      baseThread = i;
-      break;
-    }
-
-  // Shuffle values from all threads into addrArray using active threads
+  // Shuffle values from all threads into addrArray using only the active threads
   for(int i = 0; i < WarpSize; i++){
-    if(isThreadActive(activeThreadMask, i) == 0)
+    if(!isThreadActive(activeThreadMask, i))
       addrArray[2 * i] = address;
     else{
+	  // Broadcast lane index i's address value to all other threads addrArray
+	  // 2 * i represents the starting address of lane i's read/write access
+	  // we will fill in end address later
       addrArray[2 * i] = __shfl(address, i, WarpSize);
     }
   }
   
-  uint32_t LaneId = (WarpSize - 1) & threadIdx.x;
-  if(baseThread == LaneId){
+  uint32_t LaneId = __builtin_amdgcn_mbcnt_hi(~0u, __builtin_amdgcn_mbcnt_lo(~0u, 0u));
+  const int firstActiveLane = __ffs(activeThreadMask) - 1;
+  if(LaneId == firstActiveLane){
     NumCacheLines = 1;
-    // Divide all threads by cacheLineSize (128 bytes). Every other thread represents the max address that
-    // is accessed then compute (address + typeSize - 1) / cacheLineSize (128 bytes).
+    // Divide all threads address values by cacheLineSize (128 bytes) to determine the required number of memory transactions.
+	// Odd index values (i.e. 2 * i + 1) represent the end address of the access (start address + data type size)
+	// Even indexes represent the starting address of the access
     for(int i = 0; i < WarpSize; i++){
-      addrArray[2 * i + 1] = (addrArray[2 * i] + typeSize - 1) >> 7;
-      addrArray[2 * i] >>= 7;
+      addrArray[2 * i + 1] = (addrArray[2 * i] + typeSize - 1) / cacheLineSize; //ending address
+      addrArray[2 * i] /= cacheLineSize; //starting address
     }
-
-    uint64_t baseAddr = addrArray[0];
-    for(int i = 0; i < WaveFrontSize; i++)
-      if(addrArray[i] != baseAddr){
-        uint64_t current = addrArray[i];
+    //After we've divided the address by the cache line size it is assumed that if the value in the addrArray
+	//is not the same as the base address it will require a seperate memory transaction to fetch. 
+    for(int i = 0; i < 2 * WarpSize; i++)
+      if(addrArray[i] != addrArray[0]){
         NumCacheLines++;
-        for(int j = i + 1; j < WaveFrontSize; j++)
-          if(addrArray[j] == current)
-            addrArray[j] = baseAddr;
+		//If the address is one we have already seen (i.e. not unique) then it won't require an additional transaction
+		//therefore just set any duplicate values to the base address to keep us from counting it again
+        for(int j = i + 1; j < 2 * WarpSize; j++)
+          if(addrArray[j] == addrArray[i])
+            addrArray[j] = addrArray[0];
       }
 #ifdef BUILD_TESTING
   result = NumCacheLines;
