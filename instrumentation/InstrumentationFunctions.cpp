@@ -2,8 +2,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define WarpSize 32
-#define WaveFrontSize 64
+//TODO: Figure out why This seems to fail if the WaveFrontSize size is increased above 32
+#define WaveFrontSize 32
 #define cacheLineSize 128
 
 __attribute__((always_inline)) __device__ int
@@ -33,18 +33,19 @@ __attribute__((used)) __device__ uint32_t numCacheLines(void *addressPtr,
 
   uint64_t address = reinterpret_cast<uint64_t>(addressPtr);
 
-  uint64_t addrArray[2 * WarpSize];
+  uint64_t startAddrArray[WaveFrontSize];
+  uint64_t endAddrArray[WaveFrontSize];
 
-  // Shuffle values from all threads into addrArray using only the active
+  // Shuffle values from all threads into startAddrArrays using only the active
   // threads
-  for (int i = 0; i < WarpSize; i++) {
+  for (int i = 0; i < WaveFrontSize; i++) {
     if (!isThreadActive(activeThreadMask, i))
-      addrArray[2 * i] = address;
+      startAddrArray[i] = address;
     else {
       // Broadcast lane index i's address value to all other threads addrArray
       // 2 * i represents the starting address of lane i's read/write access
       // we will fill in end address later
-      addrArray[2 * i] = __shfl(address, i, WarpSize);
+      startAddrArray[i] = __shfl(address, i, WaveFrontSize);
     }
   }
 
@@ -57,27 +58,24 @@ __attribute__((used)) __device__ uint32_t numCacheLines(void *addressPtr,
     // determine the required number of memory transactions. Odd index values
     // (i.e. 2 * i + 1) represent the end address of the access (start address +
     // data type size) Even indexes represent the starting address of the access
-    for (int i = 0; i < WarpSize; i++) {
-      addrArray[2 * i + 1] =
-          (addrArray[2 * i] + typeSize - 1) / cacheLineSize; // ending address
-      addrArray[2 * i] /= cacheLineSize;                     // starting address
+    for (int i = 0; i < WaveFrontSize; i++) {
+      endAddrArray[i] = (startAddrArray[i] + typeSize - 1) / cacheLineSize; // ending address
+      startAddrArray[i] /= cacheLineSize;                                   // starting address
     }
     // After we've divided the address by the cache line size it is assumed that
     // if the value in the addrArray is not the same as the base address it will
     // require a seperate memory transaction to fetch.
-    for (int i = 0; i < 2 * WarpSize; i++) {
-      if (addrArray[i] != addrArray[0]) {
-        NumCacheLines++;
-        // If the address is one we have already seen (i.e. not unique) then it
-        // won't require an additional transaction therefore just set any
-        // duplicate values to the base address to keep us from counting it
-        // again
-        for (int j = i + 1; j < 2 * WarpSize; j++) {
-          if (addrArray[j] == addrArray[i])
-            addrArray[j] = addrArray[0];
-        }
-      }
-    }
+    for (int i = 0; i < WaveFrontSize; i++) {
+		if(startAddrArray[i] != startAddrArray[0] || endAddrArray[i] != startAddrArray[0]){
+			NumCacheLines++;
+    	for (int j = i + 1; j < WaveFrontSize; j++) {
+			if (startAddrArray[j] == startAddrArray[i])
+				startAddrArray[j] = startAddrArray[0];
+			if (endAddrArray[j] == endAddrArray[i])
+				endAddrArray[j] = endAddrArray[0];		
+		}
+		}
+	}
 #ifdef BUILD_TESTING
     result = NumCacheLines;
 #endif
