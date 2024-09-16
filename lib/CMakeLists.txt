@@ -4,6 +4,7 @@ set(AMDGCN_INSTRUMENTATION_PASSES
     InjectAMDGCNSharedMemTtrace
     AMDGCNMemCoalescing
     AMDGCNMemTrace
+    AMDGCNBarrier
     )
 
 set(InjectAMDGCNFunction_SOURCES
@@ -20,6 +21,9 @@ set(AMDGCNMemCoalescing_SOURCES
 
 set(AMDGCNMemTrace_SOURCES
 	AMDGCNMemTrace.cpp)
+
+set(AMDGCNBarrier_SOURCES
+	AMDGCNBarrier.cpp)
 
 
 foreach( plugin ${AMDGCN_INSTRUMENTATION_PASSES} )
