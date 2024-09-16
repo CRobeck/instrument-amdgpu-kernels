@@ -1,0 +1,1 @@
+TRITON_ALWAYS_COMPILE=1 TRITON_DISABLE_LINE_INFO=0 LLVM_PASS_PLUGIN_PATH=/var/lib/jenkins/instrument-amdgpu-kernels/build/lib/libAMDGCNBarrier.so python /var/lib/jenkins/triton/python/tutorials/01-vector-add.py 
