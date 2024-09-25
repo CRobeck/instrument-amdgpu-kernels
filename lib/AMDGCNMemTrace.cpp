@@ -6,6 +6,7 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Passes/PassPlugin.h"
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Support/raw_ostream.h"
 #include <iostream>
 #include <vector>
@@ -27,6 +28,9 @@ std::map<std::string, uint32_t> LocationCounterSourceMap;
 std::string LoadOrStoreMap(const BasicBlock::iterator &I){
 		if (LoadInst* LI = dyn_cast<LoadInst>(I)) return "LOAD";
 		else if (StoreInst* SI = dyn_cast<StoreInst>(I)) return "STORE";
+		else if (IntrinsicInst *II = dyn_cast<IntrinsicInst>(I))
+			if(II && II->getIntrinsicID() == Intrinsic::masked_store) return "STORE";
+			else if(II && II->getIntrinsicID() == Intrinsic::masked_load) return "LOAD";
 		else throw std::runtime_error("Error: unknown operation type");
 }
 template <typename LoadOrStoreInst> 
@@ -59,6 +63,61 @@ void InjectingInstrumentationFunction(const BasicBlock::iterator &I, const Funct
         Builder.CreateCall(FunctionType::get(Type::getVoidTy(CTX), {Addr->getType(), Type::getInt32Ty(CTX)} ,false), InstrumentationFunction, {Addr, Builder.getInt32(LocationCounterSourceMap[SourceAndAddrSpaceInfo])});
 }
 
+template <>
+void InjectingInstrumentationFunction<IntrinsicInst>(const BasicBlock::iterator &I, const Function &F, const llvm::Module &M,
+                                      uint32_t &LocationCounter){
+        auto *CI = dyn_cast<CallInst>(I);
+        if (not CI) return;	
+	unsigned OpOffset = 0;
+	IntrinsicInst *II = dyn_cast<IntrinsicInst>(I);
+	Type *AccessTy;
+	if(II && II->getIntrinsicID() == Intrinsic::masked_store){
+		OpOffset = 1;
+		AccessTy = CI->getArgOperand(0)->getType();
+	}
+	if(II && II->getIntrinsicID() == Intrinsic::masked_load){
+		OpOffset = 1;
+		AccessTy = CI->getType();
+	}
+	Value *BasePtr = CI->getOperand(0 + OpOffset);
+	Value* Mask = CI->getOperand(2 + OpOffset);
+	Value *Addr = BasePtr->stripInBoundsOffsets();
+	Type *PtrTy = cast<PointerType>(Addr->getType()->getScalarType());
+	uint32_t AddrSpace = PtrTy->getPointerAddressSpace();
+ 	LLVMContext *C = &(M.getContext());
+    	int LongSize = M.getDataLayout().getPointerSizeInBits();
+    	Type *IntptrTy = Type::getIntNTy(*C, LongSize);	
+//
+  	auto *VTy = cast<FixedVectorType>(AccessTy);
+  	unsigned Num = VTy->getNumElements();
+  	auto *Zero = ConstantInt::get(IntptrTy, 0);	
+  	for (unsigned Idx = 0; Idx < Num; ++Idx) {
+  	  Value *InstrumentedAddress = nullptr;
+  	  Instruction *InsertBefore = cast<Instruction>(I);
+  	  if (auto *Vector = dyn_cast<ConstantVector>(Mask)) {
+  	    // dyn_cast as we might get UndefValue
+  	    if (auto *Masked = dyn_cast<ConstantInt>(Vector->getOperand(Idx))) {
+  	      if (Masked->isZero())
+  	        // Mask is constant false, so no instrumentation needed.
+  	        continue;
+  	      // If we have a true or undef value, fall through to instrumentAddress.
+  	      // with InsertBefore == I
+  	    }
+  	  } else {
+  	    IRBuilder<> IRB(cast<Instruction>(I));
+  	    Value *MaskElem = IRB.CreateExtractElement(Mask, Idx);
+  	    Instruction *ThenTerm = SplitBlockAndInsertIfThen(MaskElem, I, false);
+  	    InsertBefore = ThenTerm;
+  	  }
+
+  	  IRBuilder<> IRB(InsertBefore);
+  	  InstrumentedAddress =
+  	      IRB.CreateGEP(VTy, Addr, {Zero, ConstantInt::get(IntptrTy, Idx)});
+	  errs() << InstrumentedAddress << "\n";
+  	  //instrumentAddress(I, InsertBefore, InstrumentedAddress, IsWrite);
+  	}	
+
+}
 
 
 bool AMDGCNMemTrace::runOnModule(Module &M) {
@@ -82,6 +141,12 @@ bool AMDGCNMemTrace::runOnModule(Module &M) {
 	      InjectingInstrumentationFunction<LoadInst>(I, F, M, LocationCounter);
               ModifiedCodeGen = true;                                                                     
           }
+      	else if(IntrinsicInst *II = dyn_cast<IntrinsicInst>(I)){
+              if(II->getIntrinsicID() == Intrinsic::masked_load){
+		      InjectingInstrumentationFunction<IntrinsicInst>(I, F, M, LocationCounter);
+
+      	}   
+	}	  
 	  else if(StoreInst* SI = dyn_cast<StoreInst>(I)){
 		  InjectingInstrumentationFunction<StoreInst>(I, F, M, LocationCounter);
 		  ModifiedCodeGen = true;
