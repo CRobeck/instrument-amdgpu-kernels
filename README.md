@@ -16,14 +16,9 @@ A list of the currently implemented instrumentation passes is below. The list is
 [Instrument Global Reads and Writes to Detect Uncoalesced Memory Accesses](#example-4-instrument-global-reads-and-writes-to-detect-uncoalesced-memory-accesses) - Transformation pass that inserts a function to count the number of cache lines a global load or store uses to determine uncoalesed accesses. Any number of memory transations (cache lines) needed for a particular load or store great than one indicates an uncoalesed accesses. This pass is run at the very end of the function optimization pipeline.
 
 <!---
-[Instrument Global Reads and Writes to Detect Uncoalesced Memory Accesses](#example-5-instrument-global-reads-and-writes-to-detect-uncoalesced-memory-accesses-triton)
-hipcc --save-temps -c  -ggdb InstrumentationFunctions.cpp -o InstrumentationFunctions
+[Instrument Global Reads and Writes to Generate Memory Traces from Triton ML Compiler](#example-5-instrument-global-reads-and-writes-to-generate-memory-traces-in-triton) - Transformation pass that inserts a function to output the per wave addresses of each global load and store. This pass is run at the very end of the function optimization pipeline.
 -->
 
-<!---
-Memory traces of Triton machine learning compiler kernels
-
--->
 # Getting Started
 Assuming you have a system with Rocm installed  set the correct paths and environment variables. An example module file would be:
 
@@ -275,9 +270,40 @@ cmake -DCMAKE_C_COMPILER=hipcc -DCMAKE_CXX_COMPILER=hipcc \
 the test executable will be located in ```build/bin``` and can be executed directly or through running ```make test``` in the build directory
 
 <!---
-# Triton
-AMDGCN_INSTRUMENTATION_LIB="$HOME/instrument-amdgpu-kernels/build/lib/libAMDGCNMemCoalescing.so" \
-AMDCGN_INSTRUMENTATION_FILE="$HOME/instrument-amdgpu-kernels/InstrumentationFunctions-hip-amdgcn-amd-amdhsa-gfx90a.bc" \
-AMDCGN_INSTRUMENTATION_FUNCTION="_Z13numCacheLinesPvjjj" \
-python tutorials/03-matrix-multiplication.py
+# Example 5: Instrument Global Reads and Writes to Generate Memory Traces in Triton
+
+## Install and build triton
+```bash
+git clone https://github.com/triton-lang/triton.git
+cd triton/python
+python -m pip install -e .`
+```
+## Install following pip packages for the vecadd code:
+```bash
+pip install numpy==1.20.3
+pip install matplotlib==3.4.3
+pip install numba==0.54.1
+pip install scipy==1.6.3
+pip install pandas==1.2.4
+```
+## Install and build instrument-amdgpu-kernels repo:
+```bash
+cd /var/lib/jenkins/
+git clone https://github.com/CRobeck/instrument-amdgpu-kernels.git
+cd instrument-amdgpu-kernels/instrumentation
+```
+
+```bash
+# Triton PR #4638 introduced masked load/store IR operations. We don't support that yet.
+git checkout 368c864e9a084296d887851fdd0974d3a17b78c4
+hipcc -mcode-object-version=4 -c --save-temps --offload-arch=gfx90a MemTraceInstrumentationKernel.cpp
+cd ..
+mkdir build && cd build
+cmake -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DLLVM_INSTALL_DIR=/root/.triton/llvm/llvm-4713bd4c-ubuntu-x64/ .. <-this exact path hash will be different
+cmake --build .
+
+## Memory trace instrumentation example with sample vector-add triton code
+cd ..
+TRITON_ALWAYS_COMPILE=1 TRITON_DISABLE_LINE_INFO=0 AMDCGN_INSTRUMENTATION_FUNCTIONS_FILE=./instrument-amdgpu-kernels/instrumentation/MemTraceInstrumentationKernel-hip-amdgcn-amd-amdhsa-gfx90a.bc LLVM_PASS_PLUGIN_PATH=./instrument-amdgpu-kernels/build/lib/libAMDGCNMemTrace.so python ~/triton/python/tutorials/01-vector-add.py
+```
 -->
