@@ -26,11 +26,11 @@ std::map<int, std::string> AddrSpaceMap = {{0, "FLAT"},
 std::map<std::string, uint32_t> LocationCounterSourceMap;
 
 std::string LoadOrStoreMap(const BasicBlock::iterator &I){
-		if (LoadInst* LI = dyn_cast<LoadInst>(I)) return "LOAD";
+		IntrinsicInst *II = dyn_cast<IntrinsicInst>(I);
+		if(II && II->getIntrinsicID() == Intrinsic::masked_load) return "LOAD";
+		else if(II && II->getIntrinsicID() == Intrinsic::masked_store) return "STORE";
+		else if (LoadInst* LI = dyn_cast<LoadInst>(I)) return "LOAD";
 		else if (StoreInst* SI = dyn_cast<StoreInst>(I)) return "STORE";
-		else if (IntrinsicInst *II = dyn_cast<IntrinsicInst>(I))
-			if(II && II->getIntrinsicID() == Intrinsic::masked_store) return "STORE";
-			else if(II && II->getIntrinsicID() == Intrinsic::masked_load) return "LOAD";
 		else throw std::runtime_error("Error: unknown operation type");
 }
 template <typename LoadOrStoreInst> 
@@ -66,56 +66,71 @@ void InjectingInstrumentationFunction(const BasicBlock::iterator &I, const Funct
 template <>
 void InjectingInstrumentationFunction<IntrinsicInst>(const BasicBlock::iterator &I, const Function &F, const llvm::Module &M,
                                       uint32_t &LocationCounter){
+ 	LLVMContext *CTX = &(M.getContext());
         auto *CI = dyn_cast<CallInst>(I);
         if (not CI) return;	
 	unsigned OpOffset = 0;
-	IntrinsicInst *II = dyn_cast<IntrinsicInst>(I);
 	Type *AccessTy;
+	IntrinsicInst *II = dyn_cast<IntrinsicInst>(I);
 	if(II && II->getIntrinsicID() == Intrinsic::masked_store){
 		OpOffset = 1;
 		AccessTy = CI->getArgOperand(0)->getType();
 	}
 	if(II && II->getIntrinsicID() == Intrinsic::masked_load){
-		OpOffset = 1;
+		OpOffset = 0;
 		AccessTy = CI->getType();
 	}
+
 	Value *BasePtr = CI->getOperand(0 + OpOffset);
 	Value* Mask = CI->getOperand(2 + OpOffset);
 	Value *Addr = BasePtr->stripInBoundsOffsets();
 	Type *PtrTy = cast<PointerType>(Addr->getType()->getScalarType());
 	uint32_t AddrSpace = PtrTy->getPointerAddressSpace();
- 	LLVMContext *C = &(M.getContext());
-    	int LongSize = M.getDataLayout().getPointerSizeInBits();
-    	Type *IntptrTy = Type::getIntNTy(*C, LongSize);	
-//
-  	auto *VTy = cast<FixedVectorType>(AccessTy);
-  	unsigned Num = VTy->getNumElements();
-  	auto *Zero = ConstantInt::get(IntptrTy, 0);	
-  	for (unsigned Idx = 0; Idx < Num; ++Idx) {
-  	  Value *InstrumentedAddress = nullptr;
-  	  Instruction *InsertBefore = cast<Instruction>(I);
-  	  if (auto *Vector = dyn_cast<ConstantVector>(Mask)) {
-  	    // dyn_cast as we might get UndefValue
-  	    if (auto *Masked = dyn_cast<ConstantInt>(Vector->getOperand(Idx))) {
-  	      if (Masked->isZero())
-  	        // Mask is constant false, so no instrumentation needed.
-  	        continue;
-  	      // If we have a true or undef value, fall through to instrumentAddress.
-  	      // with InsertBefore == I
-  	    }
-  	  } else {
-  	    IRBuilder<> IRB(cast<Instruction>(I));
-  	    Value *MaskElem = IRB.CreateExtractElement(Mask, Idx);
-  	    Instruction *ThenTerm = SplitBlockAndInsertIfThen(MaskElem, I, false);
-  	    InsertBefore = ThenTerm;
-  	  }
+        //Skip shared and constant memory address spaces for now
+        if(AddrSpace == 3 || AddrSpace == 4) return;	
 
-  	  IRBuilder<> IRB(InsertBefore);
-  	  InstrumentedAddress =
-  	      IRB.CreateGEP(VTy, Addr, {Zero, ConstantInt::get(IntptrTy, Idx)});
-	  errs() << InstrumentedAddress << "\n";
-  	  //instrumentAddress(I, InsertBefore, InstrumentedAddress, IsWrite);
-  	}	
+	DILocation *DL = dyn_cast<Instruction>(I)->getDebugLoc();
+
+        std::string SourceAndAddrSpaceInfo =
+            (F.getName() + "     " + DL->getFilename() + ":" +
+             Twine(DL->getLine()) + ":" + Twine(DL->getColumn()))
+                .str() + "     " + AddrSpaceMap[AddrSpace] + "     " + LoadOrStoreMap(I);
+
+	if(LocationCounterSourceMap.find(SourceAndAddrSpaceInfo) == LocationCounterSourceMap.end()){
+		errs() << LocationCounter << "     " << SourceAndAddrSpaceInfo << "\n";
+		LocationCounterSourceMap[SourceAndAddrSpaceInfo]=LocationCounter;
+		LocationCounter++;
+	}
+//    	int LongSize = M.getDataLayout().getPointerSizeInBits();
+//    	Type *IntptrTy = Type::getIntNTy(*CTX, LongSize);	
+//
+//  	auto *VTy = cast<FixedVectorType>(AccessTy);
+//  	unsigned Num = VTy->getNumElements();
+//  	auto *Zero = ConstantInt::get(IntptrTy, 0);	
+//  	for (unsigned Idx = 0; Idx < Num; ++Idx) {
+//  	  Value *InstrumentedAddress = nullptr;
+//  	  Instruction *InsertBefore = cast<Instruction>(I);
+//  	  if (auto *Vector = dyn_cast<ConstantVector>(Mask)) {
+//  	    if (auto *Masked = dyn_cast<ConstantInt>(Vector->getOperand(Idx))) {
+//  	      if (Masked->isZero())
+//  	        continue;
+//  	    }
+//  	  } else {
+//  	    IRBuilder<> IRB(cast<Instruction>(I));
+//  	    Value *MaskElem = IRB.CreateExtractElement(Mask, Idx);
+//  	    Instruction *ThenTerm = SplitBlockAndInsertIfThen(MaskElem, I, false);
+//  	    InsertBefore = ThenTerm;
+//  	  }
+
+	
+
+ // 	  IRBuilder<> IRB(InsertBefore);
+////	  IRBuilder<> IRB(dyn_cast<Instruction>(I));
+ // 	  InstrumentedAddress =
+ // 	      IRB.CreateGEP(VTy, Addr, {Zero, ConstantInt::get(IntptrTy, Idx)});
+ //       Function *InstrumentationFunction = M.getFunction("_Z8memTracePvj");
+//        IRB.CreateCall(FunctionType::get(Type::getVoidTy(*CTX), {InstrumentedAddress->getType(), Type::getInt32Ty(*CTX)} ,false), InstrumentationFunction, {InstrumentedAddress, IRB.getInt32(LocationCounterSourceMap[SourceAndAddrSpaceInfo])});
+//  	}	
 
 }
 
@@ -137,16 +152,17 @@ bool AMDGCNMemTrace::runOnModule(Module &M) {
     if (F.getCallingConv() == CallingConv::AMDGPU_KERNEL) {
       for (Function::iterator BB = F.begin(); BB != F.end(); BB++) {
         for (BasicBlock::iterator I = BB->begin(); I != BB->end(); I++) {
-          if (LoadInst* LI = dyn_cast<LoadInst>(I)) {      
-	      InjectingInstrumentationFunction<LoadInst>(I, F, M, LocationCounter);
-              ModifiedCodeGen = true;                                                                     
-          }
-      	else if(IntrinsicInst *II = dyn_cast<IntrinsicInst>(I)){
-              if(II->getIntrinsicID() == Intrinsic::masked_load){
+      	if(IntrinsicInst *II = dyn_cast<IntrinsicInst>(I)){
+              if(II->getIntrinsicID() == Intrinsic::masked_load || II->getIntrinsicID() == Intrinsic::masked_store){
 		      InjectingInstrumentationFunction<IntrinsicInst>(I, F, M, LocationCounter);
 
       	}   
-	}	  
+	}
+	else if (LoadInst* LI = dyn_cast<LoadInst>(I)) {      
+	      InjectingInstrumentationFunction<LoadInst>(I, F, M, LocationCounter);
+              ModifiedCodeGen = true;                                                                     
+          }
+	  
 	  else if(StoreInst* SI = dyn_cast<StoreInst>(I)){
 		  InjectingInstrumentationFunction<StoreInst>(I, F, M, LocationCounter);
 		  ModifiedCodeGen = true;
