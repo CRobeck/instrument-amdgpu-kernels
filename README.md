@@ -269,14 +269,14 @@ cmake -DCMAKE_C_COMPILER=hipcc -DCMAKE_CXX_COMPILER=hipcc \
 ```
 the test executable will be located in ```build/bin``` and can be executed directly or through running ```make test``` in the build directory
 
-<!---
-# Example 5: Instrument Global Reads and Writes to Generate Memory Traces in Triton
 
-## Install and build triton
+# Example 5: Instrument Global Reads and Writes to Generate Memory Traces in Triton MLIR Based ML Compiler
+
+## Install and build Triton
 ```bash
 git clone https://github.com/triton-lang/triton.git
 cd triton/python
-python -m pip install -e .`
+python -m pip install -e .
 ```
 ## Install following pip packages for the vecadd code:
 ```bash
@@ -296,6 +296,7 @@ cd instrument-amdgpu-kernels/instrumentation
 ```bash
 # Triton PR #4638 introduced masked load/store IR operations. We don't support that yet.
 git checkout 368c864e9a084296d887851fdd0974d3a17b78c4
+# --offload-arch=gfx90a assumes MI250 or MI210
 hipcc -mcode-object-version=4 -c --save-temps --offload-arch=gfx90a MemTraceInstrumentationKernel.cpp
 cd ..
 mkdir build && cd build
@@ -306,4 +307,3 @@ cmake --build .
 cd ..
 TRITON_ALWAYS_COMPILE=1 TRITON_DISABLE_LINE_INFO=0 AMDCGN_INSTRUMENTATION_FUNCTIONS_FILE=./instrument-amdgpu-kernels/instrumentation/MemTraceInstrumentationKernel-hip-amdgcn-amd-amdhsa-gfx90a.bc LLVM_PASS_PLUGIN_PATH=./instrument-amdgpu-kernels/build/lib/libAMDGCNMemTrace.so python ~/triton/python/tutorials/01-vector-add.py
 ```
--->
