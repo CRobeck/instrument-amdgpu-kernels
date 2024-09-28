@@ -299,7 +299,7 @@ git checkout 368c864e9a084296d887851fdd0974d3a17b78c4
 hipcc -mcode-object-version=4 -c --save-temps --offload-arch=gfx90a MemTraceInstrumentationKernel.cpp
 cd ..
 mkdir build && cd build
-cmake -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DLLVM_INSTALL_DIR=/root/.triton/llvm/llvm-4713bd4c-ubuntu-x64/ .. <-this exact path hash will be different
+cmake -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DLLVM_INSTALL_DIR=~/.triton/llvm/llvm-4713bd4c-ubuntu-x64/ .. <-this exact path hash will be different
 cmake --build .
 
 ## Memory trace instrumentation example with sample vector-add triton code
