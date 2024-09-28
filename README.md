@@ -2,7 +2,7 @@
 
 LLVM/MLIR provide a variety of pass APIs to interact with, and modify, the compilation pipeline. The goal of this project is to develop a set of transformation passes to instrument AMDGPU kernels to get a variety of performance analysis and optimization related information. The passes and examples are developed to be used with the AMDGPU software stack HIP/Rocm, the AMDGPU LLVM backend.
 
-Although HIP kernels can be compiled directly with clang/clang++ (i.e., clang++ -x hip) the vast majority of Rocm developers use the HIP compiler driver [hipcc](https://github.com/ROCm/llvm-project/tree/amd-staging/amd/hipcc#hipcc) or a MLIR ML Compiler pipeline (e.g. Triton, PyTorch). Therefore, the instrumentation passes and examples presented focus on getting the LLVM 17+ tool chain (LLVM/MLIR) and new pass manager integrated with Rocm, [6.0.2](https://github.com/ROCm/llvm-project/tree/rocm-6.0.2) at the time of writing, and hipcc. 
+Although HIP kernels can be compiled directly with clang/clang++ (i.e., clang++ -x hip) the vast majority of Rocm developers use the HIP compiler driver [hipcc](https://github.com/ROCm/llvm-project/tree/amd-staging/amd/hipcc#hipcc) or a MLIR ML Compiler pipeline (e.g. Triton, PyTorch, IREE). Therefore, the instrumentation passes and examples presented focus on getting the LLVM 17+ tool chain (LLVM/MLIR) and new pass manager integrated with Rocm, [6.0.2](https://github.com/ROCm/llvm-project/tree/rocm-6.0.2) at the time of writing, and hipcc. 
 
 A list of the currently implemented instrumentation passes is below. The list is under development and being actively added to.
 
@@ -15,9 +15,8 @@ A list of the currently implemented instrumentation passes is below. The list is
 
 [Instrument Global Reads and Writes to Detect Uncoalesced Memory Accesses](#example-4-instrument-global-reads-and-writes-to-detect-uncoalesced-memory-accesses) - Transformation pass that inserts a function to count the number of cache lines a global load or store uses to determine uncoalesed accesses. Any number of memory transations (cache lines) needed for a particular load or store great than one indicates an uncoalesed accesses. This pass is run at the very end of the function optimization pipeline.
 
-<!---
-[Instrument Global Reads and Writes to Generate Memory Traces from Triton ML Compiler](#example-5-instrument-global-reads-and-writes-to-generate-memory-traces-in-triton) - Transformation pass that inserts a function to output the per wave addresses of each global load and store. This pass is run at the very end of the function optimization pipeline.
--->
+[Instrument Global Reads and Writes to Generate Memory Traces in Triton MLIR Based ML Compiler](#example-5-instrument-global-reads-and-writes-to-generate-memory-traces-in-triton-mlir-based-ml-compiler) - Transformation pass that inserts a function to output the per wave addresses of each global load and store. This pass is run at the very end of the function optimization pipeline.
+
 
 # Getting Started
 Assuming you have a system with Rocm installed  set the correct paths and environment variables. An example module file would be:
