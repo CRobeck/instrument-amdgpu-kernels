@@ -277,7 +277,7 @@ git clone https://github.com/triton-lang/triton.git
 cd triton/python
 python -m pip install -e .
 ```
-## Install following pip packages for the vecadd code:
+## Install Pip Packages
 ```bash
 pip install numpy==1.20.3
 pip install matplotlib==3.4.3
@@ -285,7 +285,7 @@ pip install numba==0.54.1
 pip install scipy==1.6.3
 pip install pandas==1.2.4
 ```
-## Install and build instrument-amdgpu-kernels repo:
+## Install and Build instrument-amdgpu-kernels:
 ```bash
 cd /var/lib/jenkins/
 git clone https://github.com/CRobeck/instrument-amdgpu-kernels.git
@@ -301,8 +301,8 @@ cd ..
 mkdir build && cd build
 cmake -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DLLVM_INSTALL_DIR=~/.triton/llvm/llvm-4713bd4c-ubuntu-x64/ .. <-this exact path hash will be different
 cmake --build .
-
-## Memory trace instrumentation example with sample vector-add triton code
-cd ..
+```
+## Run Memory Trace Instrumentation With Triton vector-add tutorial
+```bash
 TRITON_ALWAYS_COMPILE=1 TRITON_DISABLE_LINE_INFO=0 AMDCGN_INSTRUMENTATION_FUNCTIONS_FILE=./instrument-amdgpu-kernels/instrumentation/MemTraceInstrumentationKernel-hip-amdgcn-amd-amdhsa-gfx90a.bc LLVM_PASS_PLUGIN_PATH=./instrument-amdgpu-kernels/build/lib/libAMDGCNMemTrace.so python ~/triton/python/tutorials/01-vector-add.py
 ```
