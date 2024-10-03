@@ -63,6 +63,54 @@ void InjectingInstrumentationFunction(const BasicBlock::iterator &I, const Funct
         Builder.CreateCall(FunctionType::get(Type::getVoidTy(CTX), {Addr->getType(), Type::getInt32Ty(CTX)} ,false), InstrumentationFunction, {Addr, Builder.getInt32(LocationCounterSourceMap[SourceAndAddrSpaceInfo])});
 }
 
+//void instrumentAddress(Instruction *OrigIns,
+//                                    Instruction *InsertBefore, Value *Addr, Type *IntptrTy){
+//  IRBuilder<> IRB(InsertBefore);
+//  Value *AddrLong = IRB.CreatePointerCast(Addr, IntptrTy);
+//  Function *InstrumentationFunction = M.getFunction("_Z8memTracePvj");
+//  Builder.CreateCall(FunctionType::get(Type::getVoidTy(CTX), {IntptrTy, Type::getInt32Ty(CTX)} ,false), InstrumentationFunction, {AddrLong, Builder.getInt32(LocationCounterSourceMap[SourceAndAddrSpaceInfo])});
+//
+//}
+
+void instrumentMaskedLoadOrStore(const DataLayout &DL, Value *Mask,
+                                              Instruction *I, Value *Addr,
+                                              Type *AccessTy, const llvm::Module &M, bool IsWrite) {
+  auto *VTy = cast<FixedVectorType>(AccessTy);
+  unsigned Num = VTy->getNumElements();
+  int LongSize = DL.getPointerSizeInBits();
+  LLVMContext *CTX = &(M.getContext());
+  Type *IntptrTy = Type::getIntNTy(*CTX, LongSize);	
+  auto *Zero = ConstantInt::get(IntptrTy, 0);
+  for (unsigned Idx = 0; Idx < Num; ++Idx) {
+    Value *InstrumentedAddress = nullptr;
+    Instruction *InsertBefore = I;
+    if (auto *Vector = dyn_cast<ConstantVector>(Mask)) {
+      // dyn_cast as we might get UndefValue
+      if (auto *Masked = dyn_cast<ConstantInt>(Vector->getOperand(Idx))) {
+        if (Masked->isZero())
+          // Mask is constant false, so no instrumentation needed.
+          continue;
+        // If we have a true or undef value, fall through to instrumentAddress.
+        // with InsertBefore == I
+      }
+    } else {
+      IRBuilder<> IRB(I);
+//      errs() << *I << "\n";
+      Value *MaskElem = IRB.CreateExtractElement(Mask, Idx);
+      Instruction *ThenTerm = SplitBlockAndInsertIfThen(MaskElem, I, false);
+//      errs() << *ThenTerm << "\n";
+      InsertBefore = ThenTerm; 
+    }
+
+    IRBuilder<> IRB(InsertBefore);
+    InstrumentedAddress =
+        IRB.CreateGEP(VTy, Addr, {Zero, ConstantInt::get(IntptrTy, Idx)});
+  Value *AddrLong = IRB.CreatePointerCast(Addr, IntptrTy);
+  //Function *InstrumentationFunction = M.getFunction("_Z8memTracePvj");
+  //IRB.CreateCall(FunctionType::get(Type::getVoidTy(CTX), {IntptrTy, Type::getInt32Ty(CTX)} ,false), InstrumentationFunction, {AddrLong, IRB.getInt32(LocationCounterSourceMap[SourceAndAddrSpaceInfo])});
+  }
+}
+
 template <>
 void InjectingInstrumentationFunction<IntrinsicInst>(const BasicBlock::iterator &I, const Function &F, const llvm::Module &M,
                                       uint32_t &LocationCounter){
@@ -72,9 +120,11 @@ void InjectingInstrumentationFunction<IntrinsicInst>(const BasicBlock::iterator 
 	unsigned OpOffset = 0;
 	Type *AccessTy;
 	IntrinsicInst *II = dyn_cast<IntrinsicInst>(I);
+	bool IsWrite = false;
 	if(II && II->getIntrinsicID() == Intrinsic::masked_store){
 		OpOffset = 1;
 		AccessTy = CI->getArgOperand(0)->getType();
+		IsWrite = true;
 	}
 	if(II && II->getIntrinsicID() == Intrinsic::masked_load){
 		OpOffset = 0;
@@ -89,7 +139,7 @@ void InjectingInstrumentationFunction<IntrinsicInst>(const BasicBlock::iterator 
         //Skip shared and constant memory address spaces for now
         if(AddrSpace == 3 || AddrSpace == 4) return;	
 
-	DILocation *DL = dyn_cast<Instruction>(I)->getDebugLoc();
+	const DILocation *DL = dyn_cast<Instruction>(I)->getDebugLoc();
 
         std::string SourceAndAddrSpaceInfo =
             (F.getName() + "     " + DL->getFilename() + ":" +
@@ -101,6 +151,7 @@ void InjectingInstrumentationFunction<IntrinsicInst>(const BasicBlock::iterator 
 		LocationCounterSourceMap[SourceAndAddrSpaceInfo]=LocationCounter;
 		LocationCounter++;
 	}
+	instrumentMaskedLoadOrStore(M.getDataLayout(), Mask, cast<Instruction>(std::next(I, 1)), Addr, AccessTy, M, IsWrite);
 //    	int LongSize = M.getDataLayout().getPointerSizeInBits();
 //    	Type *IntptrTy = Type::getIntNTy(*CTX, LongSize);	
 //
@@ -118,17 +169,20 @@ void InjectingInstrumentationFunction<IntrinsicInst>(const BasicBlock::iterator 
 //  	  } else {
 //  	    IRBuilder<> IRB(cast<Instruction>(I));
 //  	    Value *MaskElem = IRB.CreateExtractElement(Mask, Idx);
-//  	    Instruction *ThenTerm = SplitBlockAndInsertIfThen(MaskElem, I, false);
-//  	    InsertBefore = ThenTerm;
+////	    errs() << *I << "\n";
+////	    errs() << MaskElem << "\n";
+////  	    Instruction *ThenTerm = SplitBlockAndInsertIfThen(MaskElem, cast<Instruction>(I), false);
+////  	    InsertBefore = ThenTerm;
+//	    InsertBefore = cast<Instruction>(I);  	    
 //  	  }
-
-	
-
- // 	  IRBuilder<> IRB(InsertBefore);
+////
+////	
+//
+//	  IRBuilder<> IRB(InsertBefore);
 ////	  IRBuilder<> IRB(dyn_cast<Instruction>(I));
- // 	  InstrumentedAddress =
- // 	      IRB.CreateGEP(VTy, Addr, {Zero, ConstantInt::get(IntptrTy, Idx)});
- //       Function *InstrumentationFunction = M.getFunction("_Z8memTracePvj");
+// 	  InstrumentedAddress =
+// 	      IRB.CreateGEP(VTy, Addr, {Zero, ConstantInt::get(IntptrTy, Idx)});
+//       Function *InstrumentationFunction = M.getFunction("_Z8memTracePvj");
 //        IRB.CreateCall(FunctionType::get(Type::getVoidTy(*CTX), {InstrumentedAddress->getType(), Type::getInt32Ty(*CTX)} ,false), InstrumentationFunction, {InstrumentedAddress, IRB.getInt32(LocationCounterSourceMap[SourceAndAddrSpaceInfo])});
 //  	}	
 
@@ -141,6 +195,7 @@ bool AMDGCNMemTrace::runOnModule(Module &M) {
   uint32_t LocationCounter = 0;
   std::string errorMsg;
   std::unique_ptr<llvm::Module> InstrumentationModule;
+//  execv("hipcc", "./MemTraceInstrumentationKernel.cpp");
   if (!loadInstrumentationFile(InstrumentationFunctionFile, CTX, InstrumentationModule, errorMsg)) {
     printf("error loading program '%s': %s", InstrumentationFunctionFile.c_str(),
                errorMsg.c_str());
