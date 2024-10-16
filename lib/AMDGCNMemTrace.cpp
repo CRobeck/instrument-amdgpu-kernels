@@ -337,11 +337,24 @@ bool AMDGCNMemTrace::runOnModule(Module &M) {
 	Function* AugmentedKernel = AugmentedModule->getFunction(I->getName());
     std::string AugmentedName = I->getName().str() + "Pv";
     ValueToValueMapTy VMap;	
-    Function *NF =
-        Function::Create(cast<FunctionType>(I->getValueType()), I->getLinkage(),
-                         I->getAddressSpace(), AugmentedName, &M);    
-    NF->copyAttributesFrom(I);
-    VMap[I] = NF;
+  // Add an extra ptr arg on to the instrumented kernels
+  std::vector<Type *> ArgTypes;
+  for (auto arg = I->arg_begin(); arg != I->arg_end(); ++arg) {
+    ArgTypes.push_back(arg->getType());
+  }
+  ArgTypes.push_back(
+      PointerType::get(M.getContext(), /*AddrSpace=*/0));
+  FunctionType *FTy =
+      FunctionType::get(I->getFunctionType()->getReturnType(), ArgTypes,
+                        I->getFunctionType()->isVarArg());
+  Function *NF =
+      Function::Create(FTy, I->getLinkage(), I->getAddressSpace(),
+                       AugmentedName, &M);
+  NF->copyAttributesFrom(I);
+  VMap[I] = NF;
+
+  // Get the ptr we just added to the kernel arguments
+  Value *bufferPtr = &*NF->arg_end() - 1;
     Function *F = cast<Function>(VMap[I]);
 
     Function::arg_iterator DestI = F->arg_begin();
