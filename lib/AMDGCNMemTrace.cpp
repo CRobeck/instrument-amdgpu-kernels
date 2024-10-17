@@ -365,6 +365,17 @@ bool AMDGCNMemTrace::runOnModule(Module &M) {
     SmallVector<ReturnInst *, 8> Returns; // Ignore returns cloned.
     CloneFunctionInto(F, I, VMap, CloneFunctionChangeType::GlobalChanges,
                       Returns);
+    for (Function::iterator BB = NF->begin(); BB != NF->end(); BB++) {
+            for (BasicBlock::iterator I = BB->begin(); I != BB->end(); I++) {
+                    if (auto *CI = dyn_cast<CallInst>(I)){
+			    if (const Function *Called = CI->getCalledFunction()){
+                            if( CI->getCalledFunction()->getName() == "_Z8memTracePvjS_"){
+				    CI->setOperand(CI->arg_size() - 1, bufferPtr);
+			    }
+                            }
+            }
+    }    
+    }
 //
 //    if (I.hasPersonalityFn())
 //      F->setPersonalityFn(MapValue(I.getPersonalityFn(), VMap));
