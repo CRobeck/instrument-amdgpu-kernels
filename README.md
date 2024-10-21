@@ -274,6 +274,8 @@ the test executable will be located in ```build/bin``` and can be executed direc
 ## Install and build Triton
 ```bash
 git clone https://github.com/triton-lang/triton.git
+# Triton PR #4638 introduced masked load/store IR operations. We don't support that yet.
+git checkout 368c864e9a084296d887851fdd0974d3a17b78c4
 cd triton/python
 python -m pip install -e .
 ```
@@ -293,8 +295,6 @@ cd instrument-amdgpu-kernels/instrumentation
 ```
 
 ```bash
-# Triton PR #4638 introduced masked load/store IR operations. We don't support that yet.
-git checkout 368c864e9a084296d887851fdd0974d3a17b78c4
 # --offload-arch=gfx90a assumes MI250 or MI210
 hipcc -mcode-object-version=4 -c --save-temps --offload-arch=gfx90a MemTraceInstrumentationKernel.cpp
 cd ..
