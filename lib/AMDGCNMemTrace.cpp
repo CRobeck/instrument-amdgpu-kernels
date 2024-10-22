@@ -312,29 +312,10 @@ bool AMDGCNMemTrace::runOnModule(Module &M) {
       continue;
     if (F.getCallingConv() == CallingConv::AMDGPU_KERNEL) {
       GpuKernels.push_back(&F);
-      uint32_t LocationCounter = 0;
-      AugmentedModule = GenerateClonedModuleWithAddedKernelArg(F, M);
-      for (Function::iterator BB = F.begin(); BB != F.end(); BB++) {
-        for (BasicBlock::iterator I = BB->begin(); I != BB->end(); I++) {
-          if (LoadInst *LI = dyn_cast<LoadInst>(I)) {
-            PointerType *VoidPtrType = PointerType::getUnqual(CTX);
-            Constant *NullPtrVal = ConstantPointerNull::get(VoidPtrType);
-            InjectInstrumentationFunction<LoadInst>(I, F, M, LocationCounter,
-                                                    NullPtrVal, true);
-            ModifiedCodeGen = true;
-          } else if (StoreInst *SI = dyn_cast<StoreInst>(I)) {
-            PointerType *VoidPtrType = PointerType::getUnqual(CTX);
-            Constant *NullPtrVal = ConstantPointerNull::get(VoidPtrType);
-            InjectInstrumentationFunction<StoreInst>(I, F, M, LocationCounter,
-                                                     NullPtrVal, true);
-            ModifiedCodeGen = true;
-          }
-        }
-      }
     }
   }
   for (auto &I : GpuKernels) {
-	Function* AugmentedKernel = AugmentedModule->getFunction(I->getName());
+	Function* AugmentedKernel = M.getFunction(I->getName());
     std::string AugmentedName = I->getName().str() + "Pv";
     ValueToValueMapTy VMap;	
   // Add an extra ptr arg on to the instrumented kernels
@@ -365,22 +346,24 @@ bool AMDGCNMemTrace::runOnModule(Module &M) {
     SmallVector<ReturnInst *, 8> Returns; // Ignore returns cloned.
     CloneFunctionInto(F, I, VMap, CloneFunctionChangeType::GlobalChanges,
                       Returns);
-    for (Function::iterator BB = NF->begin(); BB != NF->end(); BB++) {
-            for (BasicBlock::iterator I = BB->begin(); I != BB->end(); I++) {
-                    if (auto *CI = dyn_cast<CallInst>(I)){
-			    if (const Function *Called = CI->getCalledFunction()){
-                            if( CI->getCalledFunction()->getName() == "_Z8memTracePvjS_"){
-				    CI->setOperand(CI->arg_size() - 1, bufferPtr);
-			    }
-                            }
-            }
-    }    
-    }
-//
-//    if (I.hasPersonalityFn())
-//      F->setPersonalityFn(MapValue(I.getPersonalityFn(), VMap));
-//
-//    copyComdat(F, &I);    
+      uint32_t LocationCounter = 0;
+      for (Function::iterator BB = NF->begin(); BB != NF->end(); BB++) {
+        for (BasicBlock::iterator I = BB->begin(); I != BB->end(); I++) {
+          if (LoadInst *LI = dyn_cast<LoadInst>(I)) {
+            PointerType *VoidPtrType = PointerType::getUnqual(CTX);
+            Constant *NullPtrVal = ConstantPointerNull::get(VoidPtrType);
+            InjectInstrumentationFunction<LoadInst>(I, *NF, M, LocationCounter,
+                                                    bufferPtr, true);
+            ModifiedCodeGen = true;
+          } else if (StoreInst *SI = dyn_cast<StoreInst>(I)) {
+            PointerType *VoidPtrType = PointerType::getUnqual(CTX);
+            Constant *NullPtrVal = ConstantPointerNull::get(VoidPtrType);
+            InjectInstrumentationFunction<StoreInst>(I, *NF, M, LocationCounter,
+                                                     bufferPtr, true);
+            ModifiedCodeGen = true;
+          }
+        }
+      }    
   }
   return ModifiedCodeGen;
 }
