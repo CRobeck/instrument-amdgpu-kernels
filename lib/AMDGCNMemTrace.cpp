@@ -34,15 +34,6 @@ std::string LoadOrStoreMap(const BasicBlock::iterator &I) {
     throw std::runtime_error("Error: unknown operation type");
 }
 
-static void copyComdat(GlobalObject *Dst, const GlobalObject *Src) {
-  const Comdat *SC = Src->getComdat();
-  if (!SC)
-    return;
-  Comdat *DC = Dst->getParent()->getOrInsertComdat(SC->getName());
-  DC->setSelectionKind(SC->getSelectionKind());
-  Dst->setComdat(DC);
-}
-
 template <typename LoadOrStoreInst>
 void InjectInstrumentationFunction(const BasicBlock::iterator &I,
                                    const Function &F, const llvm::Module &M,
@@ -80,227 +71,12 @@ void InjectInstrumentationFunction(const BasicBlock::iterator &I,
   LocationCounter++;
 }
 
-std::unique_ptr<Module> CloneModuleAndAddArg(
-    const Module &M, ValueToValueMapTy &VMap, const Function &Func,
-    function_ref<bool(const GlobalValue *)> ShouldCloneDefinition) {
-
-  assert(M.isMaterialized() && "Module must be materialized before cloning!");
-
-  // First off, we need to create the new module.
-  std::unique_ptr<Module> New =
-      std::make_unique<Module>(M.getModuleIdentifier(), M.getContext());
-  New->setSourceFileName(M.getSourceFileName());
-  New->setDataLayout(M.getDataLayout());
-  New->setTargetTriple(M.getTargetTriple());
-  New->setModuleInlineAsm(M.getModuleInlineAsm());
-  New->IsNewDbgInfoFormat = M.IsNewDbgInfoFormat;
-
-  // Loop over all of the global variables, making corresponding globals in the
-  // new module.  Here we add them to the VMap and to the new Module.  We
-  // don't worry about attributes or initializers, they will come later.
-  //
-  for (const GlobalVariable &I : M.globals()) {
-    GlobalVariable *NewGV = new GlobalVariable(
-        *New, I.getValueType(), I.isConstant(), I.getLinkage(),
-        (Constant *)nullptr, I.getName(), (GlobalVariable *)nullptr,
-        I.getThreadLocalMode(), I.getType()->getAddressSpace());
-    NewGV->copyAttributesFrom(&I);
-    VMap[&I] = NewGV;
-  }
-
-  // Loop over the functions in the module, making external functions as before
-  for (const Function &I : M) {
-    if (I.getName() == Func.getName())
-      continue;
-    Function *NF =
-        Function::Create(cast<FunctionType>(I.getValueType()), I.getLinkage(),
-                         I.getAddressSpace(), I.getName(), New.get());
-    NF->copyAttributesFrom(&I);
-    VMap[&I] = NF;
-  }
-  // Add an extra ptr arg on to the instrumented kernels
-  std::vector<Type *> ArgTypes;
-  for (auto arg = Func.arg_begin(); arg != Func.arg_end(); ++arg) {
-    ArgTypes.push_back(arg->getType());
-  }
-  ArgTypes.push_back(
-      PointerType::get(New.get()->getContext(), /*AddrSpace=*/0));
-  FunctionType *FTy =
-      FunctionType::get(Func.getFunctionType()->getReturnType(), ArgTypes,
-                        Func.getFunctionType()->isVarArg());
-  Function *NF =
-      Function::Create(FTy, Func.getLinkage(), Func.getAddressSpace(),
-                       Func.getName(), New.get());
-  NF->copyAttributesFrom(&Func);
-  VMap[&Func] = NF;
-
-  // Get the ptr we just added to the kernel arguments
-  Value *bufferPtr = &*NF->arg_end() - 1;
-
-  // Loop over the aliases in the module
-  for (const GlobalAlias &I : M.aliases()) {
-    if (!ShouldCloneDefinition(&I)) {
-      // An alias cannot act as an external reference, so we need to create
-      // either a function or a global variable depending on the value type.
-      // FIXME: Once pointee types are gone we can probably pick one or the
-      // other.
-      GlobalValue *GV;
-      if (I.getValueType()->isFunctionTy())
-        GV = Function::Create(cast<FunctionType>(I.getValueType()),
-                              GlobalValue::ExternalLinkage, I.getAddressSpace(),
-                              I.getName(), New.get());
-      else
-        GV = new GlobalVariable(*New, I.getValueType(), false,
-                                GlobalValue::ExternalLinkage, nullptr,
-                                I.getName(), nullptr, I.getThreadLocalMode(),
-                                I.getType()->getAddressSpace());
-      VMap[&I] = GV;
-      // We do not copy attributes (mainly because copying between different
-      // kinds of globals is forbidden), but this is generally not required for
-      // correctness.
-      continue;
-    }
-    auto *GA = GlobalAlias::create(I.getValueType(),
-                                   I.getType()->getPointerAddressSpace(),
-                                   I.getLinkage(), I.getName(), New.get());
-    GA->copyAttributesFrom(&I);
-    VMap[&I] = GA;
-  }
-
-  for (const GlobalIFunc &I : M.ifuncs()) {
-    // Defer setting the resolver function until after functions are cloned.
-    auto *GI =
-        GlobalIFunc::create(I.getValueType(), I.getAddressSpace(),
-                            I.getLinkage(), I.getName(), nullptr, New.get());
-    GI->copyAttributesFrom(&I);
-    VMap[&I] = GI;
-  }
-
-  // Now that all of the things that global variable initializer can refer to
-  // have been created, loop through and copy the global variable referrers
-  // over...  We also set the attributes on the global now.
-  //
-  for (const GlobalVariable &G : M.globals()) {
-    GlobalVariable *GV = cast<GlobalVariable>(VMap[&G]);
-
-    SmallVector<std::pair<unsigned, MDNode *>, 1> MDs;
-    G.getAllMetadata(MDs);
-    for (auto MD : MDs)
-      GV->addMetadata(MD.first, *MapMetadata(MD.second, VMap));
-
-    if (G.isDeclaration())
-      continue;
-
-    if (!ShouldCloneDefinition(&G)) {
-      // Skip after setting the correct linkage for an external reference.
-      GV->setLinkage(GlobalValue::ExternalLinkage);
-      continue;
-    }
-    if (G.hasInitializer())
-      GV->setInitializer(MapValue(G.getInitializer(), VMap));
-
-    copyComdat(GV, &G);
-  }
-
-  // Similarly, copy over function bodies now...
-  //
-  for (const Function &I : M) {
-    Function *F = cast<Function>(VMap[&I]);
-
-    if (I.isDeclaration()) {
-      // Copy over metadata for declarations since we're not doing it below in
-      // CloneFunctionInto().
-      SmallVector<std::pair<unsigned, MDNode *>, 1> MDs;
-      I.getAllMetadata(MDs);
-      for (auto MD : MDs)
-        F->addMetadata(MD.first, *MapMetadata(MD.second, VMap));
-      continue;
-    }
-
-    if (!ShouldCloneDefinition(&I)) {
-      // Skip after setting the correct linkage for an external reference.
-      F->setLinkage(GlobalValue::ExternalLinkage);
-      // Personality function is not valid on a declaration.
-      F->setPersonalityFn(nullptr);
-      continue;
-    }
-
-    Function::arg_iterator DestI = F->arg_begin();
-    for (const Argument &J : I.args()) {
-      DestI->setName(J.getName());
-      VMap[&J] = &*DestI++;
-    }
-
-    SmallVector<ReturnInst *, 8> Returns; // Ignore returns cloned.
-    CloneFunctionInto(F, &I, VMap, CloneFunctionChangeType::ClonedModule,
-                      Returns);
-
-    if (I.hasPersonalityFn())
-      F->setPersonalityFn(MapValue(I.getPersonalityFn(), VMap));
-
-    copyComdat(F, &I);
-  }
-
-  // And aliases
-  for (const GlobalAlias &I : M.aliases()) {
-    // We already dealt with undefined aliases above.
-    if (!ShouldCloneDefinition(&I))
-      continue;
-    GlobalAlias *GA = cast<GlobalAlias>(VMap[&I]);
-    if (const Constant *C = I.getAliasee())
-      GA->setAliasee(MapValue(C, VMap));
-  }
-
-  for (const GlobalIFunc &I : M.ifuncs()) {
-    GlobalIFunc *GI = cast<GlobalIFunc>(VMap[&I]);
-    if (const Constant *Resolver = I.getResolver())
-      GI->setResolver(MapValue(Resolver, VMap));
-  }
-
-  // And named metadata....
-  for (const NamedMDNode &NMD : M.named_metadata()) {
-    NamedMDNode *NewNMD = New->getOrInsertNamedMetadata(NMD.getName());
-    for (const MDNode *N : NMD.operands())
-      NewNMD->addOperand(MapMetadata(N, VMap));
-  }
-
-  // Now add the instrumentation function passing in the added ptr kernel
-  // argument as the bufferPtr
-  uint32_t LocationCounter = 0;
-  for (Function::iterator BB = NF->begin(); BB != NF->end(); BB++) {
-    for (BasicBlock::iterator I = BB->begin(); I != BB->end(); I++) {
-      if (LoadInst *LI = dyn_cast<LoadInst>(I)) {
-        InjectInstrumentationFunction<LoadInst>(
-            I, *NF, *New.get(), LocationCounter, bufferPtr, false);
-      } else if (StoreInst *SI = dyn_cast<StoreInst>(I)) {
-        InjectInstrumentationFunction<StoreInst>(
-            I, *NF, *New.get(), LocationCounter, bufferPtr, false);
-      }
-    }
-  }
-  return New;
-}
-
-std::unique_ptr<Module>
-GenerateClonedModuleWithAddedKernelArg(const Function &F,
-                                       const llvm::Module &M) {
-  ValueToValueMapTy VMap;
-  std::unique_ptr<Module> ClonedModule = CloneModuleAndAddArg(
-      M, VMap, F, [](const GlobalValue *GV) { return true; });
-  std::string moduleName = F.getName().str() + ".bc";
-  std::error_code EC;
-  llvm::raw_fd_ostream OS(moduleName, EC, llvm::sys::fs::OF_None);
-  WriteBitcodeToFile(*ClonedModule.get(), OS);
-  OS.flush();
-  return ClonedModule;
-}
 
 bool AMDGCNMemTrace::runOnModule(Module &M) {
   bool ModifiedCodeGen = false;
   auto &CTX = M.getContext();
   std::string errorMsg;
   std::unique_ptr<llvm::Module> InstrumentationModule;
-  std::unique_ptr<llvm::Module> AugmentedModule;
   std::vector<Function *> GpuKernels;
   if (!loadInstrumentationFile(InstrumentationFunctionFile, CTX,
                                InstrumentationModule, errorMsg)) {
@@ -318,7 +94,6 @@ bool AMDGCNMemTrace::runOnModule(Module &M) {
     }
   }
   for (auto &I : GpuKernels) {
-    Function *AugmentedKernel = M.getFunction(I->getName());
     std::string AugmentedName = I->getName().str() + "Pv";
     ValueToValueMapTy VMap;
     // Add an extra ptr arg on to the instrumented kernels
@@ -351,14 +126,10 @@ bool AMDGCNMemTrace::runOnModule(Module &M) {
     for (Function::iterator BB = NF->begin(); BB != NF->end(); BB++) {
       for (BasicBlock::iterator I = BB->begin(); I != BB->end(); I++) {
         if (LoadInst *LI = dyn_cast<LoadInst>(I)) {
-          PointerType *VoidPtrType = PointerType::getUnqual(CTX);
-          Constant *NullPtrVal = ConstantPointerNull::get(VoidPtrType);
           InjectInstrumentationFunction<LoadInst>(I, *NF, M, LocationCounter,
                                                   bufferPtr, true);
           ModifiedCodeGen = true;
         } else if (StoreInst *SI = dyn_cast<StoreInst>(I)) {
-          PointerType *VoidPtrType = PointerType::getUnqual(CTX);
-          Constant *NullPtrVal = ConstantPointerNull::get(VoidPtrType);
           InjectInstrumentationFunction<StoreInst>(I, *NF, M, LocationCounter,
                                                    bufferPtr, true);
           ModifiedCodeGen = true;
