@@ -95,7 +95,7 @@ bool AMDGCNMemTrace::runOnModule(Module &M) {
     }
   }
   for (auto &I : GpuKernels) {
-    std::string AugmentedName = I->getName().str() + "__amd_crk_";
+    std::string AugmentedName = "__amd_crk_" + I->getName().str() + "Pv";
     ValueToValueMapTy VMap;
     // Add an extra ptr arg on to the instrumented kernels
     std::vector<Type *> ArgTypes;
