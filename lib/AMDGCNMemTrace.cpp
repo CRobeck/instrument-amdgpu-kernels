@@ -56,12 +56,13 @@ void InjectInstrumentationFunction(const BasicBlock::iterator &I,
   std::string SourceInfo = (F.getName() + "     " + DL->getFilename() + ":" +
                             Twine(DL->getLine()) + ":" + Twine(DL->getColumn()))
                                .str();
-  Function *InstrumentationFunction = M.getFunction("_Z8memTracePvjS_");
+  //Function *InstrumentationFunction = M.getFunction("_Z8memTracePvjS_");
+  Function *InstrumentationFunction = M.getFunction("v_submit_address");
   Builder.CreateCall(FunctionType::get(Type::getVoidTy(CTX),
-                                       {Addr->getType(), Type::getInt32Ty(CTX),
-                                        Ptr->getType()},
+                                       {Ptr->getType(), Addr->getType(), 
+				       Type::getInt32Ty(CTX)},
                                        false),
-                     InstrumentationFunction, {Addr, LocationCounterVal, Ptr});
+                     InstrumentationFunction, {Ptr, Addr, LocationCounterVal});
   if (PrintLocationInfo) {
     errs() << "Injecting Mem Trace Function Into AMDGPU Kernel: " << SourceInfo
            << "\n";
@@ -94,7 +95,7 @@ bool AMDGCNMemTrace::runOnModule(Module &M) {
     }
   }
   for (auto &I : GpuKernels) {
-    std::string AugmentedName = I->getName().str() + "Pv";
+    std::string AugmentedName = I->getName().str() + "__amd_crk_";
     ValueToValueMapTy VMap;
     // Add an extra ptr arg on to the instrumented kernels
     std::vector<Type *> ArgTypes;
