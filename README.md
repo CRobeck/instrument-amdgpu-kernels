@@ -282,10 +282,8 @@ python -m pip install -e .
 ## Install Pip Packages
 ```bash
 pip install numpy==1.26.4
-pip install matplotlib==3.4.3
-pip install numba==0.54.1
-pip install scipy==1.6.3
-pip install pandas==1.2.4
+pip install matplotlib
+pip install pandas
 ```
 ## Install and Build instrument-amdgpu-kernels:
 ```bash
