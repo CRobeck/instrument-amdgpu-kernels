@@ -287,7 +287,6 @@ pip install pandas
 ```
 ## Install and Build instrument-amdgpu-kernels:
 ```bash
-cd /var/lib/jenkins/
 git clone https://github.com/CRobeck/instrument-amdgpu-kernels.git
 cd instrument-amdgpu-kernels/instrumentation
 ```
