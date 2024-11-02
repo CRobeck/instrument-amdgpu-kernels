@@ -277,7 +277,7 @@ git clone https://github.com/triton-lang/triton.git
 # Triton PR #4638 introduced masked load/store IR operations. We don't support that yet.
 git checkout 368c864e9a084296d887851fdd0974d3a17b78c4
 cd triton/python
-python -m pip install -e .
+pip install .
 ```
 ## Install Pip Packages
 ```bash
