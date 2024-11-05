@@ -25,7 +25,7 @@ bool InjectAMDGCNFunc::runOnModule(Module &M) {
 
       // Get an IR builder. Sets the insertion point to the top of the function
       IRBuilder<> Builder(&*F.getEntryBlock().getFirstInsertionPt());
-      Function *WorkItemXIDIntrinsicFunc = Intrinsic::getDeclaration(
+      Function *WorkItemXIDIntrinsicFunc = Intrinsic::getOrInsertDeclaration(
           F.getParent(), Intrinsic::amdgcn_workitem_id_x);
 
       Value *WorkItemXValue = Builder.CreateCall(WorkItemXIDIntrinsicFunc, {});
@@ -43,7 +43,7 @@ bool InjectAMDGCNFunc::runOnModule(Module &M) {
 PassPluginLibraryInfo getPassPluginInfo() {
   const auto callback = [](PassBuilder &PB) {
     PB.registerPipelineEarlySimplificationEPCallback(
-        [&](ModulePassManager &MPM, auto) {
+        [&](ModulePassManager &MPM, OptimizationLevel OL, ThinOrFullLTOPhase Phase) {
           MPM.addPass(InjectAMDGCNFunc());
           return true;
         });
