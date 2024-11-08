@@ -40,29 +40,54 @@ void InjectInstrumentationFunction(const BasicBlock::iterator &I,
                                    uint32_t &LocationCounter, llvm::Value *Ptr,
                                    bool PrintLocationInfo) {
   auto &CTX = M.getContext();
-  auto LSI = dyn_cast<LoadOrStoreInst>(I);
-  if (not LSI)
-    return;
+  // We only instrument load and store instructions. The type of access
+  // (load/store) is passed to the instrumentation function too, so we need
+  // a value for that.
   IRBuilder<> Builder(dyn_cast<Instruction>(I));
+  Value *AccessTypeVal;
+  Type *PointeeType;
+  auto LI = dyn_cast<LoadInst>(I);
+  auto SI = dyn_cast<StoreInst>(I);
+  if (LI) {
+    AccessTypeVal = Builder.getInt8(0b01);
+    PointeeType = LI->getType();
+  } else if (SI) {
+    AccessTypeVal = Builder.getInt8(0b10);
+    PointeeType = SI->getValueOperand()->getType();
+  } else {
+    return;
+  }
+  auto LSI = dyn_cast<LoadOrStoreInst>(I);
   Value *Addr = LSI->getPointerOperand();
   Value *LocationCounterVal = Builder.getInt32(LocationCounter);
   Value *Op = LSI->getPointerOperand()->stripPointerCasts();
   uint32_t AddrSpace = cast<PointerType>(Op->getType())->getAddressSpace();
-  // Skip shared and constant memory address spaces for now
-  if (AddrSpace == 3 || AddrSpace == 4)
-    return;
+  Value *AddrSpaceVal = Builder.getInt8(AddrSpace);
+  uint16_t PointeeTypeSize = M.getDataLayout().getTypeStoreSize(PointeeType);
+  Value *PointeeTypeSizeVal = Builder.getInt16(PointeeTypeSize);
   DILocation *DL = dyn_cast<Instruction>(I)->getDebugLoc();
 
   std::string SourceInfo = (F.getName() + "     " + DL->getFilename() + ":" +
                             Twine(DL->getLine()) + ":" + Twine(DL->getColumn()))
                                .str();
-  //Function *InstrumentationFunction = M.getFunction("_Z8memTracePvjS_");
+  // signature of instrumentation function:
+  // v_submit_address(dh_comms_descriptor *rsrc,
+  //                  void *address,
+  //                  uint32_t src_loc_idx,
+  //                  uint8_t rw_kind,
+  //                  uint8_t memory_space,
+  //                  uint16_t sizeof_pointee)
+
   Function *InstrumentationFunction = M.getFunction("v_submit_address");
-  Builder.CreateCall(FunctionType::get(Type::getVoidTy(CTX),
-                                       {Ptr->getType(), Addr->getType(), 
-				       Type::getInt32Ty(CTX)},
-                                       false),
-                     InstrumentationFunction, {Ptr, Addr, LocationCounterVal});
+  Builder.CreateCall(
+      FunctionType::get(Type::getVoidTy(CTX),
+                        {Ptr->getType(), Addr->getType(), Type::getInt32Ty(CTX),
+                         Type::getInt8Ty(CTX), Type::getInt8Ty(CTX),
+                         Type::getInt16Ty(CTX)},
+                        false),
+      InstrumentationFunction,
+      {Ptr, Addr, LocationCounterVal, AccessTypeVal, AddrSpaceVal,
+       PointeeTypeSizeVal});
   if (PrintLocationInfo) {
     errs() << "Injecting Mem Trace Function Into AMDGPU Kernel: " << SourceInfo
            << "\n";
@@ -71,7 +96,6 @@ void InjectInstrumentationFunction(const BasicBlock::iterator &I,
   }
   LocationCounter++;
 }
-
 
 bool AMDGCNMemTrace::runOnModule(Module &M) {
   bool ModifiedCodeGen = false;
