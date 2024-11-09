@@ -1,4 +1,4 @@
-#include "AMDGCNNumCacheLines.h"
+#include "AMDGCNMemTrace.h"
 #include "utils.h"
 
 #include "llvm/Bitcode/BitcodeWriter.h"
@@ -90,20 +90,10 @@ void InjectInstrumentationFunction(const BasicBlock::iterator &I,
   LocationCounter++;
 }
 
-bool AMDGCNNumCacheLines::runOnModule(Module &M) {
+bool AMDGCNMemTrace::runOnModule(Module &M) {
   bool ModifiedCodeGen = false;
   auto &CTX = M.getContext();
-//  std::string errorMsg;
-//  std::unique_ptr<llvm::Module> InstrumentationModule;
   std::vector<Function *> GpuKernels;
-//  if (!loadInstrumentationFile(InstrumentationFunctionFile, CTX,
-//                               InstrumentationModule, errorMsg)) {
-//    printf("error loading program '%s': %s",
-//           InstrumentationFunctionFile.c_str(), errorMsg.c_str());
-//    exit(1);
-//  }
-//  Linker::linkModules(M, std::move(InstrumentationModule));
-  // Get the unmodified kernels first so we don't end up in a infinite loop
   for (auto &F : M) {
     if (F.isIntrinsic())
       continue;
@@ -158,64 +148,15 @@ bool AMDGCNNumCacheLines::runOnModule(Module &M) {
   return ModifiedCodeGen;
 }
 
-//bool AMDGCNNumCacheLines::runOnModule(Module &M) {
-//  bool ModifiedCodeGen = false;
-//  auto &CTX = M.getContext();
-//  uint32_t TtraceCounterInt = 1;
-//  for (auto &F : M) {
-//    if(F.isIntrinsic()) continue;
-//    if (F.getCallingConv() == CallingConv::AMDGPU_KERNEL) {
-//      for (Function::iterator BB = F.begin(); BB != F.end(); BB++) {
-//        for (BasicBlock::iterator I = BB->begin(); I != BB->end(); I++) {
-//          // Global memory reads
-//          if (LoadInst* LI = dyn_cast<LoadInst>(I)) {      
-//              IRBuilder<> Builder(dyn_cast<Instruction>(I));
-//              Value *Addr = LI->getPointerOperand();
-//              Value *TtraceCounterIntVal = Builder.getInt32(TtraceCounterInt);
-//              Value *Op = LI->getPointerOperand()->stripPointerCasts();
-//              uint32_t AddrSpace =
-//                  cast<PointerType>(Op->getType())->getAddressSpace();
-//              //Shared and Constant Address Spaces
-//              if(AddrSpace == 3 || AddrSpace == 4) continue;
-//              
-//                StringRef UnmangledName = getUnmangledName(F.getName());
-//             
-//              DILocation *DL = dyn_cast<Instruction>(I)->getDebugLoc();
-////
-//              std::string SourceInfo =
-//                  (F.getName() + "     " + DL->getFilename() + ":" +
-//                   Twine(DL->getLine()) + ":" + Twine(DL->getColumn()))
-//                      .str();
-//
-//              Type* dataType = LI->getType();
-//	      	  const DataLayout dl = M.getDataLayout();
-//              uint32_t typeSize = dl.getTypeStoreSize(dataType); 
-//              Value *typeSizeVal = Builder.getInt32(typeSize);
-//              FunctionType *FT = FunctionType::get(Type::getVoidTy(CTX), {Addr->getType(), Type::getInt32Ty(CTX), Type::getInt32Ty(CTX)}, false);
-//              //FunctionCallee InstrumentationFunction = M.getOrInsertFunction("_Z13numCacheLinesPvjj", FT);
-//			  //Builder.CreateCall(InstrumentationFunction, {Addr, TtraceCounterIntVal, typeSizeVal});
-//              errs() << "Injecting Num Cache Lines Function Into AMDGPU Kernel: " << UnmangledName
-//                     << "\n";                     
-//              errs() << TtraceCounterInt << "     " << SourceInfo << "\n";
-//              TtraceCounterInt++;   
-//              ModifiedCodeGen = true;                                                                     
-//          }
-//        }
-//      }
-//  } 
-//}
-//    return ModifiedCodeGen;
-//}
-
 PassPluginLibraryInfo getPassPluginInfo() {
   const auto callback = [](PassBuilder &PB) {
     PB.registerOptimizerLastEPCallback([&](ModulePassManager &MPM, auto) {
-        MPM.addPass(AMDGCNNumCacheLines());
+        MPM.addPass(AMDGCNMemTrace());
       return true;
     });
   };
 
-  return {LLVM_PLUGIN_API_VERSION, "amdgcn-num-cache-lines",
+  return {LLVM_PLUGIN_API_VERSION, "amdgcn-mem-trace",
           LLVM_VERSION_STRING, callback};
 };
 
