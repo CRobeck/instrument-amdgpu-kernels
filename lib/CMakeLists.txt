@@ -4,13 +4,14 @@ set(AMDGCN_INSTRUMENTATION_PASSES
     InjectAMDGCNSharedMemTtrace
     AMDGCNMemCoalescing
     AMDGCNMemTrace
+    AMDGCNMemTraceHip
     )
 
 set(InjectAMDGCNFunction_SOURCES
   InjectAMDGCNFunction.cpp)
 
 set(InjectAMDGCNInlineASM_SOURCES
-  InjectAMDGCNInlineASM.cpp)  
+  InjectAMDGCNInlineASM.cpp)
 
 set(InjectAMDGCNSharedMemTtrace_SOURCES
     InjectAMDGCNSharedMemTtrace.cpp)
@@ -20,6 +21,9 @@ set(AMDGCNMemCoalescing_SOURCES
 
 set(AMDGCNMemTrace_SOURCES
 	AMDGCNMemTrace.cpp)
+
+  set(AMDGCNMemTraceHip_SOURCES
+	AMDGCNMemTraceHip.cpp)
 
 
 foreach( plugin ${AMDGCN_INSTRUMENTATION_PASSES} )
