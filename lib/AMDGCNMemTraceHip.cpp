@@ -1,19 +1,19 @@
-#include "AMDGCNMemTrace.h"
+#include "AMDGCNMemTraceHip.h"
 #include "utils.h"
 
 #include "llvm/Bitcode/BitcodeWriter.h"
-#include "llvm/Demangle/Demangle.h"
-#include "llvm/Demangle/ItaniumDemangle.h"
-#include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/IntrinsicsAMDGPU.h"
 #include "llvm/IR/PassManager.h"
+#include "llvm/IR/IRBuilder.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Passes/PassPlugin.h"
-#include "llvm/Support/Allocator.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Cloning.h"
+#include "llvm/Demangle/Demangle.h"
+#include "llvm/Demangle/ItaniumDemangle.h"
+#include "llvm/Support/Allocator.h"
 #include <iostream>
 #include <vector>
 using namespace llvm;
@@ -51,33 +51,36 @@ void InjectInstrumentationFunction(const BasicBlock::iterator &I,
     PointeeType = SI->getValueOperand()->getType();
   } else {
     return;
-  }
+  }  
   if (not LSI)
     return;
-
+  
   Value *Addr = LSI->getPointerOperand();
   Value *LocationCounterVal = Builder.getInt32(LocationCounter);
   Value *Op = LSI->getPointerOperand()->stripPointerCasts();
   uint32_t AddrSpace = cast<PointerType>(Op->getType())->getAddressSpace();
   Value *AddrSpaceVal = Builder.getInt8(AddrSpace);
   uint16_t PointeeTypeSize = M.getDataLayout().getTypeStoreSize(PointeeType);
-  Value *PointeeTypeSizeVal = Builder.getInt16(PointeeTypeSize);
+  Value *PointeeTypeSizeVal = Builder.getInt16(PointeeTypeSize);  
+  // Skip shared and constant memory address spaces for now
+  if (AddrSpace == 3 || AddrSpace == 4)
+    return;
   DILocation *DL = dyn_cast<Instruction>(I)->getDebugLoc();
 
   std::string SourceInfo = (F.getName() + "     " + DL->getFilename() + ":" +
                             Twine(DL->getLine()) + ":" + Twine(DL->getColumn()))
                                .str();
 
-  FunctionType *FT = FunctionType::get(
-      Type::getVoidTy(CTX),
-      {Ptr->getType(), Addr->getType(), Type::getInt32Ty(CTX),
-       Type::getInt8Ty(CTX), Type::getInt8Ty(CTX), Type::getInt16Ty(CTX)},
-      false);
+  FunctionType *FT =  FunctionType::get(Type::getVoidTy(CTX),
+                        {Ptr->getType(), Addr->getType(), Type::getInt32Ty(CTX),
+                         Type::getInt8Ty(CTX), Type::getInt8Ty(CTX),
+                         Type::getInt16Ty(CTX)},
+                        false);                                       
   FunctionCallee InstrumentationFunction =
-      M.getOrInsertFunction("v_submit_address", FT);
-  Builder.CreateCall(FT, cast<Function>(InstrumentationFunction.getCallee()),
-                     {Ptr, Addr, LocationCounterVal, AccessTypeVal,
-                      AddrSpaceVal, PointeeTypeSizeVal});
+          M.getOrInsertFunction("v_submit_address", FT);   
+  Builder.CreateCall(FT, cast<Function>(InstrumentationFunction.getCallee()), 
+  {Ptr, Addr, LocationCounterVal, AccessTypeVal, AddrSpaceVal,
+       PointeeTypeSizeVal});
   if (PrintLocationInfo) {
     errs() << "Injecting Mem Trace Function Into AMDGPU Kernel: " << SourceInfo
            << "\n";
@@ -87,10 +90,12 @@ void InjectInstrumentationFunction(const BasicBlock::iterator &I,
   LocationCounter++;
 }
 
-bool AMDGCNMemTrace::runOnModule(Module &M) {
+bool AMDGCNMemTraceHip::runOnModule(Module &M) {
   bool ModifiedCodeGen = false;
   auto &CTX = M.getContext();
+
   std::vector<Function *> GpuKernels;
+
   for (auto &F : M) {
     if (F.isIntrinsic())
       continue;
@@ -148,13 +153,13 @@ bool AMDGCNMemTrace::runOnModule(Module &M) {
 PassPluginLibraryInfo getPassPluginInfo() {
   const auto callback = [](PassBuilder &PB) {
     PB.registerOptimizerLastEPCallback([&](ModulePassManager &MPM, auto) {
-      MPM.addPass(AMDGCNMemTrace());
+        MPM.addPass(AMDGCNMemTraceHip());
       return true;
     });
   };
 
-  return {LLVM_PLUGIN_API_VERSION, "amdgcn-mem-trace", LLVM_VERSION_STRING,
-          callback};
+  return {LLVM_PLUGIN_API_VERSION, "amdgcn-mem-trace-hip",
+          LLVM_VERSION_STRING, callback};
 };
 
 extern "C" LLVM_ATTRIBUTE_WEAK PassPluginLibraryInfo llvmGetPassPluginInfo() {
