@@ -37,6 +37,7 @@ foreach( plugin ${AMDGCN_INSTRUMENTATION_PASSES} )
 
     target_link_libraries(
       ${plugin}
+      LLVMCodeGen
       LLVMCore
       LLVMIRReader
       LLVMLinker
