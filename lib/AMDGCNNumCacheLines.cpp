@@ -105,7 +105,7 @@ bool AMDGCNMemTrace::runOnModule(Module &M) {
 
 PassPluginLibraryInfo getPassPluginInfo() {
   const auto callback = [](PassBuilder &PB) {
-    PB.registerOptimizerLastEPCallback([&](ModulePassManager &MPM, auto&&... args) {
+    PB.registerOptimizerLastEPCallback([&](ModulePassManager &MPM, OptimizationLevel Level, ThinOrFullLTOPhase Phase) {
         MPM.addPass(AMDGCNMemTrace());
       return true;
     });
