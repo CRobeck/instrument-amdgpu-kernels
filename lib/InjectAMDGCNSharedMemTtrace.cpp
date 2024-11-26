@@ -237,7 +237,7 @@ bool InjectAMDGCNSharedMemTtrace::runOnModule(Module &M) {
 
 PassPluginLibraryInfo getPassPluginInfo() {
   const auto callback = [](PassBuilder &PB) {
-    PB.registerOptimizerLastEPCallback([&](ModulePassManager &MPM, OptimizationLevel Level, ThinOrFullLTOPhase Phase) {
+    PB.registerOptimizerLastEPCallback([&](ModulePassManager &MPM, auto) {
       MPM.addPass(InjectAMDGCNSharedMemTtrace());
       return true;
     });
