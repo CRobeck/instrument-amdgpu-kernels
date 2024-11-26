@@ -32,6 +32,7 @@ std::string LoadOrStoreMap(const BasicBlock::iterator &I){
 template <typename LoadOrStoreInst> 
 void InjectingInstrumentationFunction(const BasicBlock::iterator &I, const Function &F, const llvm::Module &M,
 				      uint32_t &LocationCounter){
+	auto &CTX = M.getContext();
 	auto LSI = dyn_cast<LoadOrStoreInst>(I);
 	if (not LSI) return;
 	IRBuilder<> Builder(dyn_cast<Instruction>(I));
@@ -56,7 +57,7 @@ void InjectingInstrumentationFunction(const BasicBlock::iterator &I, const Funct
 	
 //        Function *InstrumentationFunction = M.getFunction("_Z8memTracePvj");
 //        Builder.CreateCall(FunctionType::get(Type::getVoidTy(CTX), {Addr->getType(), Type::getInt32Ty(CTX)} ,false), InstrumentationFunction, {Addr, Builder.getInt32(LocationCounterSourceMap[SourceAndAddrSpaceInfo])});
-	  Type* dataType = nullptr;
+	  Type* dataType;
 	  if (LoadInst* LI = dyn_cast<LoadInst>(I))
 		  dataType=LI->getType();
 	  else if (StoreInst* SI = dyn_cast<StoreInst>(I))
@@ -105,7 +106,7 @@ bool AMDGCNMemTrace::runOnModule(Module &M) {
 
 PassPluginLibraryInfo getPassPluginInfo() {
   const auto callback = [](PassBuilder &PB) {
-    PB.registerOptimizerLastEPCallback([&](ModulePassManager &MPM, OptimizationLevel Level, ThinOrFullLTOPhase Phase) {
+    PB.registerOptimizerLastEPCallback([&](ModulePassManager &MPM, auto) {
         MPM.addPass(AMDGCNMemTrace());
       return true;
     });
