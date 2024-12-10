@@ -22,25 +22,31 @@ set(AMDGCNMemTrace_SOURCES
 	AMDGCNMemTrace.cpp)
 
 
-foreach( plugin ${AMDGCN_INSTRUMENTATION_PASSES} )
-    add_library(
-      ${plugin}
-      SHARED
-      ${${plugin}_SOURCES}
-      )
+set(AMDGCN_INSTRUMENTATION_PLUGINS "")
 
-    target_include_directories(
-      ${plugin}
-      PRIVATE
-      "${CMAKE_CURRENT_SOURCE_DIR}/../include"
+foreach( plugin ${AMDGCN_INSTRUMENTATION_PASSES} )
+  add_library(
+    ${plugin}
+    SHARED
+    ${${plugin}_SOURCES}
+  )
+
+  target_include_directories(
+    ${plugin}
+    PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/../include"
+  )
+
+  target_link_libraries(
+    ${plugin}
+    PRIVATE
+    LLVMCore
+    LLVMIRReader
+    LLVMLinker
+    "$<$<PLATFORM_ID:Darwin>:-undefined dynamic_lookup>"
     )
 
-    target_link_libraries(
-      ${plugin}
-      PRIVATE
-      LLVMCore
-      LLVMIRReader
-      LLVMLinker
-      "$<$<PLATFORM_ID:Darwin>:-undefined dynamic_lookup>"
-      )
+  list(APPEND AMDGCN_INSTRUMENTATION_PLUGINS ${plugin})
 endforeach()
+
+set(AMDGCN_INSTRUMENTATION_PLUGINS "${AMDGCN_INSTRUMENTATION_PLUGINS}" PARENT_SCOPE)

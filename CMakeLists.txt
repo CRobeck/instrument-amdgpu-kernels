@@ -103,3 +103,8 @@ if (${BUILD_TESTING})
 	add_subdirectory(tests)
 endif()
 
+# Installation
+install(TARGETS ${AMDGCN_INSTRUMENTATION_PLUGINS} 
+        LIBRARY DESTINATION lib/${CMAKE_PROJECT_NAME}
+        PUBLIC_HEADER DESTINATION include/${CMAKE_PROJECT_NAME})
+
