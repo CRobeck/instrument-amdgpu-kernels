@@ -46,7 +46,7 @@ bool InjectAMDGCNInlineASM::runOnModule(Module &M) {
 PassPluginLibraryInfo getPassPluginInfo() {
   const auto callback = [](PassBuilder &PB) {
     PB.registerPipelineEarlySimplificationEPCallback(
-        [&](ModulePassManager &MPM, OptimizationLevel Level, ThinOrFullLTOPhase Phase) {
+        [&](ModulePassManager &MPM, auto&&... args) {
           MPM.addPass(InjectAMDGCNInlineASM());
           return true;
         });
