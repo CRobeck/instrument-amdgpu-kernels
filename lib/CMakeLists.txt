@@ -59,9 +59,7 @@ function(link_against_llvm llvm_version)
   endforeach()
 endfunction()
 
-
 link_against_llvm("ROCM")
 link_against_llvm("TRITON")
-
 
 set(AMDGCN_INSTRUMENTATION_PLUGINS "${AMDGCN_INSTRUMENTATION_PLUGINS}" PARENT_SCOPE)

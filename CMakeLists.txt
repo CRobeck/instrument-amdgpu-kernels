@@ -7,9 +7,6 @@ set(ROCM_LLVM "" CACHE PATH "Path to the ROCm LLVM directory")
 
 # Function to find and configure LLVM
 function(find_and_configure_llvm llvm_install_dir llvm_version)
-  # Cache the original CMAKE_PREFIX_PATH
-  set(_original_cmake_prefix_path ${CMAKE_PREFIX_PATH})
-
   # Confirm that the LLVM installation directory exists
   set(LLVM_INCLUDE_DIR "${llvm_install_dir}/include/llvm")
   if(NOT EXISTS "${LLVM_INCLUDE_DIR}")
@@ -36,10 +33,7 @@ function(find_and_configure_llvm llvm_install_dir llvm_version)
     find LLVMConfig.cmake.")
   endif()
 
-  list(APPEND CMAKE_PREFIX_PATH "${llvm_install_dir}/lib/cmake/llvm/")
-  message(STATUS "CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH}")
-
-  find_package(LLVM CONFIG REQUIRED)
+  include("${llvm_install_dir}/lib/cmake/llvm/LLVMConfig.cmake")
 
   if("${LLVM_VERSION_MAJOR}" VERSION_LESS 17)
     message(FATAL_ERROR "Found LLVM ${LLVM_VERSION_MAJOR}, but need LLVM 17 or above")
@@ -55,12 +49,10 @@ function(find_and_configure_llvm llvm_install_dir llvm_version)
     Targets     ${LLVM_TARGETS_TO_BUILD}"
   )
 
-  set(LLVM_INCLUDE_DIRS_${llvm_version} ${LLVM_INCLUDE_DIRS})
-  set(LLVM_LIBRARY_DIRS_${llvm_version} ${LLVM_LIBRARY_DIRS})
-  set(LLVM_DEFINITIONS_${llvm_version} ${LLVM_DEFINITIONS})
+  set(LLVM_INCLUDE_DIRS_${llvm_version} ${LLVM_INCLUDE_DIRS} PARENT_SCOPE)
+  set(LLVM_LIBRARY_DIRS_${llvm_version} ${LLVM_LIBRARY_DIRS} PARENT_SCOPE)
+  set(LLVM_DEFINITIONS_${llvm_version} ${LLVM_DEFINITIONS} PARENT_SCOPE)
 
-  # Restore the original CMAKE_PREFIX_PATH
-  set(CMAKE_PREFIX_PATH ${_original_cmake_prefix_path})
 endfunction()
 
 find_and_configure_llvm(${ROCM_LLVM} "ROCM")
