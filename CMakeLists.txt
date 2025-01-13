@@ -1,61 +1,75 @@
 cmake_minimum_required(VERSION 3.21)
 project(InstrumentAMDGPUKernel LANGUAGES C CXX)
 
+# Define LLVM versions
+set(TRITON_LLVM "" CACHE PATH "Path to the Triton LLVM directory")
+set(ROCM_LLVM "" CACHE PATH "Path to the ROCm LLVM directory")
 
-set(LLVM_INSTALL_DIR "" CACHE PATH "LLVM installation directory")
+# Function to find and configure LLVM
+function(find_and_configure_llvm llvm_install_dir llvm_version)
+  # Cache the original CMAKE_PREFIX_PATH
+  set(_original_cmake_prefix_path ${CMAKE_PREFIX_PATH})
 
-set(LLVM_INCLUDE_DIR "${LLVM_INSTALL_DIR}/include/llvm")
-if(NOT EXISTS "${LLVM_INCLUDE_DIR}")
-message(FATAL_ERROR
-  " LLVM_INSTALL_DIR (${LLVM_INCLUDE_DIR}) is invalid.")
-endif()
-
-# Check that the LLVMConfig.cmake file exists 
-set(- FALSE)
-
-# Ubuntu + Darwin
-if(EXISTS "${LLVM_INSTALL_DIR}/lib/cmake/llvm/LLVMConfig.cmake")
-  set(VALID_INSTALLATION TRUE)
-endif()
-
-# Fedora
-if(EXISTS "${LLVM_INSTALL_DIR}/lib64/cmake/llvm/LLVMConfig.cmake")
-  set(VALID_INSTALLATION TRUE)
-endif()
-
-if(NOT ${VALID_INSTALLATION})
+  # Confirm that the LLVM installation directory exists
+  set(LLVM_INCLUDE_DIR "${llvm_install_dir}/include/llvm")
+  if(NOT EXISTS "${LLVM_INCLUDE_DIR}")
   message(FATAL_ERROR
-    "LLVM installation directory, (${LLVM_INSTALL_DIR}), is invalid. Couldn't
+    " llvm_install_dir (${LLVM_INCLUDE_DIR}) is invalid.")
+  endif()
+  
+  # Check that the LLVMConfig.cmake file exists 
+  set(- FALSE)
+
+  # Ubuntu + Darwin
+  if(EXISTS "${llvm_install_dir}/lib/cmake/llvm/LLVMConfig.cmake")
+    set(VALID_INSTALLATION TRUE)
+  endif()
+
+  # Fedora
+  if(EXISTS "${llvm_install_dir}/lib64/cmake/llvm/LLVMConfig.cmake")
+    set(VALID_INSTALLATION TRUE)
+  endif()
+
+  if(NOT ${VALID_INSTALLATION})
+  message(FATAL_ERROR
+    "LLVM installation directory, (${llvm_install_dir}), is invalid. Couldn't
     find LLVMConfig.cmake.")
-endif()
+  endif()
 
-list(APPEND CMAKE_PREFIX_PATH "${LLVM_INSTALL_DIR}/lib/cmake/llvm/")
+  list(APPEND CMAKE_PREFIX_PATH "${llvm_install_dir}/lib/cmake/llvm/")
+  message(STATUS "CMAKE_PREFIX_PATH: ${CMAKE_PREFIX_PATH}")
 
-find_package(LLVM CONFIG)
+  find_package(LLVM CONFIG REQUIRED)
 
-if("${LLVM_VERSION_MAJOR}" VERSION_LESS 17)
-  message(FATAL_ERROR "Found LLVM ${LLVM_VERSION_MAJOR}, but need LLVM 17 or above")
-endif()
+  if("${LLVM_VERSION_MAJOR}" VERSION_LESS 17)
+    message(FATAL_ERROR "Found LLVM ${LLVM_VERSION_MAJOR}, but need LLVM 17 or above")
+  endif()
 
-message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
-message(STATUS "Using LLVMConfig.cmake in: ${LLVM_INSTALL_DIR}")
+  message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION} in ${llvm_install_dir}")
+  message(STATUS "Using LLVMConfig.cmake in: ${llvm_install_dir}")
 
-message("LLVM STATUS:
-  Definitions ${LLVM_DEFINITIONS}
-  Includes    ${LLVM_INCLUDE_DIRS}
-  Libraries   ${LLVM_LIBRARY_DIRS}
-  Targets     ${LLVM_TARGETS_TO_BUILD}"
-)
+  message("LLVM STATUS:
+    Definitions ${LLVM_DEFINITIONS}
+    Includes    ${LLVM_INCLUDE_DIRS}
+    Libraries   ${LLVM_LIBRARY_DIRS}
+    Targets     ${LLVM_TARGETS_TO_BUILD}"
+  )
 
-include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
-link_directories(${LLVM_LIBRARY_DIRS})
-add_definitions(${LLVM_DEFINITIONS})
+  set(LLVM_INCLUDE_DIRS_${llvm_version} ${LLVM_INCLUDE_DIRS})
+  set(LLVM_LIBRARY_DIRS_${llvm_version} ${LLVM_LIBRARY_DIRS})
+  set(LLVM_DEFINITIONS_${llvm_version} ${LLVM_DEFINITIONS})
+
+  # Restore the original CMAKE_PREFIX_PATH
+  set(CMAKE_PREFIX_PATH ${_original_cmake_prefix_path})
+endfunction()
+
+find_and_configure_llvm(${ROCM_LLVM} "ROCM")
+find_and_configure_llvm(${TRITON_LLVM} "TRITON")
 
 set(CMAKE_CXX_STANDARD 17 CACHE STRING "")
 
 if (NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE Debug CACHE
-      STRING "Build type (default Debug):" FORCE)
+  set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type (default Debug):" FORCE)
 endif()
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall \
@@ -78,9 +92,8 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
 
 # Avoid warning about DOWNLOAD_EXTRACT_TIMESTAMP in CMake 3.24:
 if (CMAKE_VERSION VERSION_GREATER_EQUAL "3.24.0")
-	cmake_policy(SET CMP0135 NEW)
+  cmake_policy(SET CMP0135 NEW)
 endif()
-
 
 # enable_testing()
 
@@ -107,4 +120,3 @@ endif()
 install(TARGETS ${AMDGCN_INSTRUMENTATION_PLUGINS} 
         LIBRARY DESTINATION lib/${CMAKE_PROJECT_NAME}
         PUBLIC_HEADER DESTINATION include/${CMAKE_PROJECT_NAME})
-

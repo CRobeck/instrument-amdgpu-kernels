@@ -24,29 +24,44 @@ set(AMDGCNMemTrace_SOURCES
 
 set(AMDGCN_INSTRUMENTATION_PLUGINS "")
 
-foreach( plugin ${AMDGCN_INSTRUMENTATION_PASSES} )
-  add_library(
-    ${plugin}
-    SHARED
-    ${${plugin}_SOURCES}
-  )
-
-  target_include_directories(
-    ${plugin}
-    PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/../include"
-  )
-
-  target_link_libraries(
-    ${plugin}
-    PRIVATE
-    LLVMCore
-    LLVMIRReader
-    LLVMLinker
-    "$<$<PLATFORM_ID:Darwin>:-undefined dynamic_lookup>"
+function(link_against_llvm llvm_version)
+  string(TOLOWER ${llvm_version} install_suffix)
+  foreach( plugin ${AMDGCN_INSTRUMENTATION_PASSES} )
+    add_library(
+      ${plugin}-${install_suffix}
+      SHARED
+      ${${plugin}_SOURCES}
     )
 
-  list(APPEND AMDGCN_INSTRUMENTATION_PLUGINS ${plugin})
-endforeach()
+    target_include_directories(
+      ${plugin}-${install_suffix}
+      PRIVATE
+      "${CMAKE_CURRENT_SOURCE_DIR}/../include"
+      ${LLVM_INCLUDE_DIRS_${llvm_version}}
+    )
+
+    target_link_directories(
+      ${plugin}-${install_suffix}
+      PRIVATE
+      ${LLVM_LIBRARY_DIRS_${llvm_version}}
+    )
+
+    target_link_libraries(
+      ${plugin}-${install_suffix}
+      PRIVATE
+      LLVMCore
+      LLVMIRReader
+      LLVMLinker
+      "$<$<PLATFORM_ID:Darwin>:-undefined dynamic_lookup>"
+      )
+
+    list(APPEND AMDGCN_INSTRUMENTATION_PLUGINS ${plugin})
+  endforeach()
+endfunction()
+
+
+link_against_llvm("ROCM")
+link_against_llvm("TRITON")
+
 
 set(AMDGCN_INSTRUMENTATION_PLUGINS "${AMDGCN_INSTRUMENTATION_PLUGINS}" PARENT_SCOPE)
