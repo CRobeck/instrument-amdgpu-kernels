@@ -1,9 +1,16 @@
 cmake_minimum_required(VERSION 3.21)
 project(InstrumentAMDGPUKernel LANGUAGES C CXX)
 
+if(DEFINED ENV{ROCM_PATH})
+  set(ROCM_PATH $ENV{ROCM_PATH})
+else()
+  set(ROCM_PATH "/opt/rocm")
+endif()
+message("ROCM_PATH: ${ROCM_PATH}")
+
 # Define LLVM versions
 set(TRITON_LLVM "" CACHE PATH "Path to the Triton LLVM directory")
-set(ROCM_LLVM "" CACHE PATH "Path to the ROCm LLVM directory")
+set(ROCM_LLVM "${ROCM_PATH}/llvm" CACHE PATH "Path to the ROCm LLVM directory")
 
 # Function to find and configure LLVM
 function(find_and_configure_llvm llvm_install_dir llvm_version)
@@ -42,7 +49,7 @@ function(find_and_configure_llvm llvm_install_dir llvm_version)
   message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION} in ${llvm_install_dir}")
   message(STATUS "Using LLVMConfig.cmake in: ${llvm_install_dir}")
 
-  message("LLVM STATUS:
+  message("${llvm_version} LLVM STATUS:
     Definitions ${LLVM_DEFINITIONS}
     Includes    ${LLVM_INCLUDE_DIRS}
     Libraries   ${LLVM_LIBRARY_DIRS}
