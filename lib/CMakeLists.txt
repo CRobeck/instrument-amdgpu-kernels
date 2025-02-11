@@ -4,13 +4,14 @@ set(AMDGCN_INSTRUMENTATION_PASSES
     InjectAMDGCNSharedMemTtrace
     AMDGCNNumCacheLines
     AMDGCNMemTrace
+    AMDGCNMemTraceHip
     )
 
 set(InjectAMDGCNFunction_SOURCES
   InjectAMDGCNFunction.cpp)
 
 set(InjectAMDGCNInlineASM_SOURCES
-  InjectAMDGCNInlineASM.cpp)  
+  InjectAMDGCNInlineASM.cpp)
 
 set(InjectAMDGCNSharedMemTtrace_SOURCES
     InjectAMDGCNSharedMemTtrace.cpp)
@@ -21,6 +22,8 @@ set(AMDGCNNumCacheLines_SOURCES
 set(AMDGCNMemTrace_SOURCES
 	AMDGCNMemTrace.cpp)
 
+set(AMDGCNMemTraceHip_SOURCES
+	AMDGCNMemTraceHip.cpp)
 
 set(AMDGCN_INSTRUMENTATION_PLUGINS "")
 
@@ -37,14 +40,14 @@ foreach( plugin ${AMDGCN_INSTRUMENTATION_PASSES} )
     "${CMAKE_CURRENT_SOURCE_DIR}/../include"
   )
 
-  target_link_libraries(
-    ${plugin}
-    PRIVATE
-    LLVMCore
-    LLVMIRReader
-    LLVMLinker
-    "$<$<PLATFORM_ID:Darwin>:-undefined dynamic_lookup>"
-    )
+#  target_link_libraries(
+#    ${plugin}
+#    PRIVATE
+#    LLVMCore
+#    LLVMIRReader
+#    LLVMLinker
+#    "$<$<PLATFORM_ID:Darwin>:-undefined dynamic_lookup>"
+#    )
 
   list(APPEND AMDGCN_INSTRUMENTATION_PLUGINS ${plugin})
 endforeach()
