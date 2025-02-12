@@ -58,7 +58,9 @@ void InjectInstrumentationFunction(const BasicBlock::iterator &I,
   DILocation *DL = dyn_cast<Instruction>(I)->getDebugLoc();
 
   Value *Addr = LSI->getPointerOperand();
-  Value *LocationCounterVal = Builder.getInt32(DL->getLine());
+  Value *DbgFileHashVal = Builder.getInt64(0xdeadbeef);
+  Value *DbgLineVal = Builder.getInt32(DL->getLine());
+  Value *DbgColumnVal = Builder.getInt32(DL->getColumn());
   Value *Op = LSI->getPointerOperand()->stripPointerCasts();
   uint32_t AddrSpace = cast<PointerType>(Op->getType())->getAddressSpace();
   Value *AddrSpaceVal = Builder.getInt8(AddrSpace);
@@ -74,14 +76,15 @@ void InjectInstrumentationFunction(const BasicBlock::iterator &I,
 
   FunctionType *FT = FunctionType::get(
       Type::getVoidTy(CTX),
-      {Ptr->getType(), Addr->getType(), Type::getInt32Ty(CTX),
-       Type::getInt8Ty(CTX), Type::getInt8Ty(CTX), Type::getInt16Ty(CTX)},
+      {Ptr->getType(), Addr->getType(), Type::getInt64Ty(CTX),
+       Type::getInt32Ty(CTX), Type::getInt32Ty(CTX), Type::getInt8Ty(CTX),
+       Type::getInt8Ty(CTX), Type::getInt16Ty(CTX)},
       false);
   FunctionCallee InstrumentationFunction =
       M.getOrInsertFunction("v_submit_address", FT);
   Builder.CreateCall(FT, cast<Function>(InstrumentationFunction.getCallee()),
-                     {Ptr, Addr, LocationCounterVal, AccessTypeVal,
-                      AddrSpaceVal, PointeeTypeSizeVal});
+                     {Ptr, Addr, DbgFileHashVal, DbgLineVal, DbgColumnVal,
+                      AccessTypeVal, AddrSpaceVal, PointeeTypeSizeVal});
   if (PrintLocationInfo) {
     errs() << "Injecting Mem Trace Function Into AMDGPU Kernel: " << SourceInfo
            << "\n";
