@@ -31,6 +31,23 @@ std::string LoadOrStoreMap(const BasicBlock::iterator &I) {
     throw std::runtime_error("Error: unknown operation type");
 }
 
+std::string getFullPath(const llvm::DILocation *DIL) {
+  if (!DIL)
+    return "";
+
+  const llvm::DIFile *File = DIL->getScope()->getFile();
+  if (!File)
+    return "";
+
+  std::string Directory = File->getDirectory().str();
+  std::string FileName = File->getFilename().str();
+
+  if (!Directory.empty())
+    return Directory + "/" + FileName; // Concatenate full path
+  else
+    return FileName; // No directory available, return just the file name
+}
+
 template <typename LoadOrStoreInst>
 void InjectInstrumentationFunction(const BasicBlock::iterator &I,
                                    const Function &F, llvm::Module &M,
@@ -57,8 +74,11 @@ void InjectInstrumentationFunction(const BasicBlock::iterator &I,
 
   DILocation *DL = dyn_cast<Instruction>(I)->getDebugLoc();
 
+  std::string dbgFile = getFullPath(DL);
+  size_t dbgFileHash = std::hash<std::string>{}(dbgFile);
+
   Value *Addr = LSI->getPointerOperand();
-  Value *DbgFileHashVal = Builder.getInt64(0xdeadbeef);
+  Value *DbgFileHashVal = Builder.getInt64(dbgFileHash);
   Value *DbgLineVal = Builder.getInt32(DL->getLine());
   Value *DbgColumnVal = Builder.getInt32(DL->getColumn());
   Value *Op = LSI->getPointerOperand()->stripPointerCasts();
@@ -70,7 +90,7 @@ void InjectInstrumentationFunction(const BasicBlock::iterator &I,
   if (AddrSpace == 3 || AddrSpace == 4)
     return;
 
-  std::string SourceInfo = (F.getName() + "     " + DL->getFilename() + ":" +
+  std::string SourceInfo = (F.getName() + "     " + dbgFile + ":" +
                             Twine(DL->getLine()) + ":" + Twine(DL->getColumn()))
                                .str();
 
