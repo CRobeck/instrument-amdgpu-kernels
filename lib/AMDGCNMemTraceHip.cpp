@@ -176,7 +176,7 @@ bool AMDGCNMemTraceHip::runOnModule(Module &M) {
 
 PassPluginLibraryInfo getPassPluginInfo() {
   const auto callback = [](PassBuilder &PB) {
-    PB.registerOptimizerLastEPCallback([&](ModulePassManager &MPM, auto) {
+    PB.registerOptimizerLastEPCallback([&](ModulePassManager &MPM, auto&&... args) {
       MPM.addPass(AMDGCNMemTraceHip());
       return true;
     });
