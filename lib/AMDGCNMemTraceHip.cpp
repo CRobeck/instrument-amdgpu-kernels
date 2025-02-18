@@ -86,24 +86,28 @@ void InjectInstrumentationFunction(const BasicBlock::iterator &I,
   Value *AddrSpaceVal = Builder.getInt8(AddrSpace);
   uint16_t PointeeTypeSize = M.getDataLayout().getTypeStoreSize(PointeeType);
   Value *PointeeTypeSizeVal = Builder.getInt16(PointeeTypeSize);
-  // Skip shared and constant memory address spaces for now
-  if (AddrSpace == 3 || AddrSpace == 4)
-    return;
 
   std::string SourceInfo = (F.getName() + "     " + dbgFile + ":" +
                             Twine(DL->getLine()) + ":" + Twine(DL->getColumn()))
                                .str();
 
+  // v_submit_message expects addresses (passed in Addr) to be 64-bits. However,
+  // LDS pointers are 32 bits, so we have to cast those. Ptr (the pointer to the
+  // dh_comms resources in global device memory) is 64-bits, so we use its type
+  // to do the cast.
+
+  Value *Addr64 = Builder.CreatePointerCast(Addr, Ptr->getType());
+
   FunctionType *FT = FunctionType::get(
       Type::getVoidTy(CTX),
-      {Ptr->getType(), Addr->getType(), Type::getInt64Ty(CTX),
+      {Ptr->getType(), Addr64->getType(), Type::getInt64Ty(CTX),
        Type::getInt32Ty(CTX), Type::getInt32Ty(CTX), Type::getInt8Ty(CTX),
        Type::getInt8Ty(CTX), Type::getInt16Ty(CTX)},
       false);
   FunctionCallee InstrumentationFunction =
       M.getOrInsertFunction("v_submit_address", FT);
   Builder.CreateCall(FT, cast<Function>(InstrumentationFunction.getCallee()),
-                     {Ptr, Addr, DbgFileHashVal, DbgLineVal, DbgColumnVal,
+                     {Ptr, Addr64, DbgFileHashVal, DbgLineVal, DbgColumnVal,
                       AccessTypeVal, AddrSpaceVal, PointeeTypeSizeVal});
   if (PrintLocationInfo) {
     errs() << "Injecting Mem Trace Function Into AMDGPU Kernel: " << SourceInfo
@@ -116,7 +120,6 @@ void InjectInstrumentationFunction(const BasicBlock::iterator &I,
 
 bool AMDGCNMemTraceHip::runOnModule(Module &M) {
   bool ModifiedCodeGen = false;
-  auto &CTX = M.getContext();
 
   std::vector<Function *> GpuKernels;
 
