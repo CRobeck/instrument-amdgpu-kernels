@@ -62,11 +62,13 @@ void InjectingInstrumentationFunction(const BasicBlock::iterator &I, const Funct
 
 
 bool AMDGCNMemTrace::runOnModule(Module &M) {
+  printf("Hello from AMDGCNMemTrace.cpp, runModule()\n");
   bool ModifiedCodeGen = false;
   auto &CTX = M.getContext();
   uint32_t LocationCounter = 0;
   std::string errorMsg;
   std::unique_ptr<llvm::Module> InstrumentationModule;
+  printf("Calling loadInstrumentationFile() with file %s\n", InstrumentationFunctionFile.c_str());
   if (!loadInstrumentationFile(InstrumentationFunctionFile, CTX, InstrumentationModule, errorMsg)) {
     printf("error loading program '%s': %s", InstrumentationFunctionFile.c_str(),
                errorMsg.c_str());
@@ -94,6 +96,7 @@ bool AMDGCNMemTrace::runOnModule(Module &M) {
 }
 
 PassPluginLibraryInfo getPassPluginInfo() {
+  printf("Hello from AMDGCNMemTrace.cpp, getPassPluginInfo()\n");
   const auto callback = [](PassBuilder &PB) {
     PB.registerOptimizerLastEPCallback([&](ModulePassManager &MPM, auto&&... args) {
         MPM.addPass(AMDGCNMemTrace());

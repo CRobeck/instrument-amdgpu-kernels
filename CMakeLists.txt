@@ -41,6 +41,7 @@ function(find_and_configure_llvm llvm_install_dir llvm_version)
   endif()
 
   include("${llvm_install_dir}/lib/cmake/llvm/LLVMConfig.cmake")
+  #include("${llvm_install_dir}/lib/cmake/llvm/LLVM-Config.cmake")
 
   if("${LLVM_VERSION_MAJOR}" VERSION_LESS 17)
     message(FATAL_ERROR "Found LLVM ${LLVM_VERSION_MAJOR}, but need LLVM 17 or above")

@@ -1,10 +1,10 @@
 set(AMDGCN_INSTRUMENTATION_PASSES
 	InjectAMDGCNFunction
-    InjectAMDGCNInlineASM
-    InjectAMDGCNSharedMemTtrace
-    AMDGCNNumCacheLines
-    AMDGCNMemTrace
-    )
+  InjectAMDGCNInlineASM
+  InjectAMDGCNSharedMemTtrace
+  AMDGCNNumCacheLines
+  AMDGCNMemTrace
+)
 
 set(InjectAMDGCNFunction_SOURCES
   InjectAMDGCNFunction.cpp)
@@ -40,22 +40,33 @@ function(link_against_llvm llvm_version)
       ${LLVM_INCLUDE_DIRS_${llvm_version}}
     )
 
-    target_link_directories(
-      ${plugin}-${install_suffix}
-      PRIVATE
-      ${LLVM_LIBRARY_DIRS_${llvm_version}}
-    )
+    # target_link_directories(
+    #   ${plugin}-${install_suffix}
+    #   PRIVATE
+    #   ${LLVM_LIBRARY_DIRS_${llvm_version}}
+    # )
 
-    target_link_libraries(
-      ${plugin}-${install_suffix}
-      PRIVATE
-      LLVMCore
-      LLVMIRReader
-      LLVMLinker
-      "$<$<PLATFORM_ID:Darwin>:-undefined dynamic_lookup>"
-      )
+    # target_link_libraries(
+    #   ${plugin}-${install_suffix}
+    #   PRIVATE
+    #   LLVMCore
+    #   LLVMIRReader
+    #   LLVMLinker
+    #   "$<$<PLATFORM_ID:Darwin>:-undefined dynamic_lookup>"
+    #   # ${LLVM_LIBRARY_DIRS_${llvm_version}}/libLLVMCore.a
+    #   # ${LLVM_LIBRARY_DIRS_${llvm_version}}/libLLVMIRReader.a
+    #   # ${LLVM_LIBRARY_DIRS_${llvm_version}}/libLLVMLinker.a
+    #   # ${LLVM_LIBRARY_DIRS_${llvm_version}}/libLLVMSupport.a
+    # )
 
-    list(APPEND AMDGCN_INSTRUMENTATION_PLUGINS ${plugin})
+    # set_target_properties(
+    #   ${plugin}-${install_suffix}
+    #   PROPERTIES
+    #   LINK_SEARCH_START_STATIC ON
+    #   LINK_SEARCH_END_STATIC ON
+    # )
+
+    list(APPEND AMDGCN_INSTRUMENTATION_PLUGINS ${plugin}-${install_suffix})
   endforeach()
 endfunction()
 
