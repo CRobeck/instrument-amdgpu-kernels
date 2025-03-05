@@ -27,20 +27,20 @@ set(AMDGCNMemTraceHip_SOURCES
 
 set(AMDGCN_INSTRUMENTATION_PLUGINS "")
 
-function(link_against_llvm llvm_verion)
+function(link_against_llvm llvm_version)
   string(TOLOWER ${llvm_version} install_suffix)
-
   foreach( plugin ${AMDGCN_INSTRUMENTATION_PASSES} )
     add_library(
-      ${plugin}
+      ${plugin}-${install_suffix}
       SHARED
       ${${plugin}_SOURCES}
     )
 
     target_include_directories(
-      ${plugin}
+      ${plugin}-${install_suffix}
       PRIVATE
       "${CMAKE_CURRENT_SOURCE_DIR}/../include"
+      ${LLVM_INCLUDE_DIRS_${llvm_version}}
     )
 
     # target_link_directories(
@@ -50,7 +50,7 @@ function(link_against_llvm llvm_verion)
     # )
 
     #  target_link_libraries(
-    #    ${plugin}
+    #    ${plugin}-${install_suffix}
     #    PRIVATE
     #    LLVMCore
     #    LLVMIRReader
@@ -69,7 +69,7 @@ function(link_against_llvm llvm_verion)
     #   LINK_SEARCH_END_STATIC ON
     # )
 
-    list(APPEND AMDGCN_INSTRUMENTATION_PLUGINS ${plugin})
+    list(APPEND AMDGCN_INSTRUMENTATION_PLUGINS ${plugin}-${install_suffix})
   endforeach()
 endfunction()
 
