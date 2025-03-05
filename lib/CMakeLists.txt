@@ -27,29 +27,53 @@ set(AMDGCNMemTraceHip_SOURCES
 
 set(AMDGCN_INSTRUMENTATION_PLUGINS "")
 
-foreach( plugin ${AMDGCN_INSTRUMENTATION_PASSES} )
-  add_library(
-    ${plugin}
-    SHARED
-    ${${plugin}_SOURCES}
-  )
+function(link_against_llvm llvm_verion)
+  string(TOLOWER ${llvm_version} install_suffix)
 
-  target_include_directories(
-    ${plugin}
-    PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/../include"
-  )
+  foreach( plugin ${AMDGCN_INSTRUMENTATION_PASSES} )
+    add_library(
+      ${plugin}
+      SHARED
+      ${${plugin}_SOURCES}
+    )
 
-#  target_link_libraries(
-#    ${plugin}
-#    PRIVATE
-#    LLVMCore
-#    LLVMIRReader
-#    LLVMLinker
-#    "$<$<PLATFORM_ID:Darwin>:-undefined dynamic_lookup>"
-#    )
+    target_include_directories(
+      ${plugin}
+      PRIVATE
+      "${CMAKE_CURRENT_SOURCE_DIR}/../include"
+    )
 
-  list(APPEND AMDGCN_INSTRUMENTATION_PLUGINS ${plugin})
-endforeach()
+    # target_link_directories(
+    #   ${plugin}-${install_suffix}
+    #   PRIVATE
+    #   ${LLVM_LIBRARY_DIRS_${llvm_version}}
+    # )
+
+    #  target_link_libraries(
+    #    ${plugin}
+    #    PRIVATE
+    #    LLVMCore
+    #    LLVMIRReader
+    #    LLVMLinker
+    #    "$<$<PLATFORM_ID:Darwin>:-undefined dynamic_lookup>"
+    #   # ${LLVM_LIBRARY_DIRS_${llvm_version}}/libLLVMCore.a
+    #   # ${LLVM_LIBRARY_DIRS_${llvm_version}}/libLLVMIRReader.a
+    #   # ${LLVM_LIBRARY_DIRS_${llvm_version}}/libLLVMLinker.a
+    #   # ${LLVM_LIBRARY_DIRS_${llvm_version}}/libLLVMSupport.a
+    #    )
+
+    # set_target_properties(
+    #   ${plugin}-${install_suffix}
+    #   PROPERTIES
+    #   LINK_SEARCH_START_STATIC ON
+    #   LINK_SEARCH_END_STATIC ON
+    # )
+
+    list(APPEND AMDGCN_INSTRUMENTATION_PLUGINS ${plugin})
+  endforeach()
+endfunction()
+
+link_against_llvm("ROCM")
+link_against_llvm("TRITON")
 
 set(AMDGCN_INSTRUMENTATION_PLUGINS "${AMDGCN_INSTRUMENTATION_PLUGINS}" PARENT_SCOPE)
