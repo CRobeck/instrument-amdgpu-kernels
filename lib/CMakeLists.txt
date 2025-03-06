@@ -43,31 +43,23 @@ function(link_against_llvm llvm_version)
       ${LLVM_INCLUDE_DIRS_${llvm_version}}
     )
 
-    # target_link_directories(
-    #   ${plugin}-${install_suffix}
-    #   PRIVATE
-    #   ${LLVM_LIBRARY_DIRS_${llvm_version}}
-    # )
+    if(${llvm_version} STREQUAL "TRITON")
+      target_link_directories(
+        ${plugin}-${install_suffix}
+        PRIVATE
+        ${LLVM_LIBRARY_DIRS_${llvm_version}}
+      )  
 
-    #  target_link_libraries(
-    #    ${plugin}-${install_suffix}
-    #    PRIVATE
-    #    LLVMCore
-    #    LLVMIRReader
-    #    LLVMLinker
-    #    "$<$<PLATFORM_ID:Darwin>:-undefined dynamic_lookup>"
-    #   # ${LLVM_LIBRARY_DIRS_${llvm_version}}/libLLVMCore.a
-    #   # ${LLVM_LIBRARY_DIRS_${llvm_version}}/libLLVMIRReader.a
-    #   # ${LLVM_LIBRARY_DIRS_${llvm_version}}/libLLVMLinker.a
-    #   # ${LLVM_LIBRARY_DIRS_${llvm_version}}/libLLVMSupport.a
-    #    )
+      target_link_libraries(
+        ${plugin}-${install_suffix}
+        PRIVATE
+        LLVMCore
+        LLVMIRReader
+        LLVMLinker
+        "$<$<PLATFORM_ID:Darwin>:-undefined dynamic_lookup>"
+      )
+    endif()
 
-    # set_target_properties(
-    #   ${plugin}-${install_suffix}
-    #   PROPERTIES
-    #   LINK_SEARCH_START_STATIC ON
-    #   LINK_SEARCH_END_STATIC ON
-    # )
 
     list(APPEND AMDGCN_INSTRUMENTATION_PLUGINS ${plugin}-${install_suffix})
   endforeach()
