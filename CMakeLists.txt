@@ -21,7 +21,7 @@ function(find_and_configure_llvm llvm_install_dir llvm_version)
     " llvm_install_dir (${LLVM_INCLUDE_DIR}) is invalid.")
   endif()
 
-  # Check that the LLVMConfig.cmake file exists 
+  # Check that the LLVMConfig.cmake file exists
   set(- FALSE)
 
   # Ubuntu + Darwin
@@ -80,7 +80,8 @@ if (NOT CMAKE_BUILD_TYPE)
       STRING "Build type (default Debug):" FORCE)
 endif()
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall \
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} \
+  -Wall -Wextra -Werror -Wno-unused-parameter -Wno-unused-function \
   -DLLVM_DISABLE_ABI_BREAKING_CHECKS_ENFORCING \
   -fdiagnostics-color=always")
 
@@ -126,7 +127,6 @@ if (${BUILD_TESTING})
 endif()
 
 # Installation
-install(TARGETS ${AMDGCN_INSTRUMENTATION_PLUGINS} 
+install(TARGETS ${AMDGCN_INSTRUMENTATION_PLUGINS}
         LIBRARY DESTINATION lib/${CMAKE_PROJECT_NAME}
         PUBLIC_HEADER DESTINATION include/${CMAKE_PROJECT_NAME})
-
