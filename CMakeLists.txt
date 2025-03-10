@@ -69,7 +69,9 @@ list(APPEND CMAKE_PREFIX_PATH "${LLVM_INSTALL_DIR}/lib/cmake/llvm/")
 
 
 find_and_configure_llvm(${ROCM_LLVM} "ROCM")
-find_and_configure_llvm(${TRITON_LLVM} "TRITON")
+if(TRITON_LLVM)
+  find_and_configure_llvm(${TRITON_LLVM} "TRITON")
+endif()
 
 set(CMAKE_CXX_STANDARD 17 CACHE STRING "")
 

@@ -66,6 +66,10 @@ function(link_against_llvm llvm_version)
 endfunction()
 
 link_against_llvm("ROCM")
-link_against_llvm("TRITON")
+if(TRITON_LLVM)
+  link_against_llvm("TRITON")
+else()
+  message(STATUS "Skipping Triton instrumentation setup. No TRITON_LLVM detected")
+endif()
 
 set(AMDGCN_INSTRUMENTATION_PLUGINS "${AMDGCN_INSTRUMENTATION_PLUGINS}" PARENT_SCOPE)
