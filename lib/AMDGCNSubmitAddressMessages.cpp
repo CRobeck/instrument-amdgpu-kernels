@@ -16,6 +16,15 @@
 #include "llvm/Transforms/Utils/Cloning.h"
 #include <iostream>
 #include <vector>
+
+#include "llvm/Bitcode/BitcodeReader.h"
+#include "llvm/Support/MemoryBuffer.h"
+#include <cstdlib>
+#include <dlfcn.h>
+#include <limits.h>
+#include <llvm/Support/FileSystem.h>
+#include <unistd.h>
+
 using namespace llvm;
 using namespace std;
 
@@ -118,8 +127,65 @@ void InjectInstrumentationFunction(const BasicBlock::iterator &I,
   LocationCounter++;
 }
 
+std::string getPluginDirectory() {
+  Dl_info dl_info;
+  if (dladdr(reinterpret_cast<void *>(&getPluginDirectory), &dl_info) == 0) {
+    errs() << "Error: Could not determine plugin directory!\n";
+    return "";
+  }
+
+  std::string PluginPath = dl_info.dli_fname;
+  size_t LastSlash = PluginPath.find_last_of('/');
+  if (LastSlash == std::string::npos) {
+    errs() << "Error: Plugin path invalid!\n";
+    return "";
+  }
+
+  return PluginPath.substr(0, LastSlash); // Extract directory
+}
+
 bool AMDGCNMemTraceHip::runOnModule(Module &M) {
-  bool ModifiedCodeGen = false;
+  std::string PluginDir = getPluginDirectory();
+  if (PluginDir.empty()) {
+    errs() << "Error: Could not determine plugin directory!\n";
+    return false;
+  }
+
+  std::string BitcodePath =
+      PluginDir + "/dh_comms_dev.bc"; // Construct full path
+
+  if (!llvm::sys::fs::exists(BitcodePath)) {
+    errs() << "Error: Bitcode file not found at " << BitcodePath << "\n";
+    return false;
+  }
+
+  auto Buffer = MemoryBuffer::getFile(BitcodePath);
+  if (!Buffer) {
+    errs() << "Error loading bitcode file: " << BitcodePath << "\n";
+    return false;
+  }
+
+  auto DeviceModuleOrErr =
+      parseBitcodeFile(Buffer->get()->getMemBufferRef(), M.getContext());
+  if (!DeviceModuleOrErr) {
+    errs() << "Error parsing bitcode file: " << BitcodePath << "\n";
+    return false;
+  }
+
+  std::unique_ptr<llvm::Module> DeviceModule =
+      std::move(DeviceModuleOrErr.get());
+
+  if (M.getTargetTriple() == "amdgcn-amd-amdhsa") {
+    errs() << "Linking device module from " << BitcodePath
+           << " into GPU module\n";
+    if (llvm::Linker::linkModules(M, std::move(DeviceModule))) {
+      errs()
+          << "Error linking device function module into instrumented module!\n";
+      return false;
+    }
+  }
+
+  // Now v_submit_address should be available inside M
 
   std::vector<Function *> GpuKernels;
 
@@ -130,6 +196,8 @@ bool AMDGCNMemTraceHip::runOnModule(Module &M) {
       GpuKernels.push_back(&F);
     }
   }
+
+  bool ModifiedCodeGen = false;
   for (auto &I : GpuKernels) {
     std::string AugmentedName = "__amd_crk_" + I->getName().str() + "Pv";
     ValueToValueMapTy VMap;
@@ -179,10 +247,11 @@ bool AMDGCNMemTraceHip::runOnModule(Module &M) {
 
 PassPluginLibraryInfo getPassPluginInfo() {
   const auto callback = [](PassBuilder &PB) {
-    PB.registerOptimizerLastEPCallback([&](ModulePassManager &MPM, auto&&... args) {
-      MPM.addPass(AMDGCNMemTraceHip());
-      return true;
-    });
+    PB.registerOptimizerLastEPCallback(
+        [&](ModulePassManager &MPM, auto &&...args) {
+          MPM.addPass(AMDGCNMemTraceHip());
+          return true;
+        });
   };
 
   return {LLVM_PLUGIN_API_VERSION, "amdgcn-mem-trace-hip", LLVM_VERSION_STRING,

@@ -4,7 +4,7 @@ set(AMDGCN_INSTRUMENTATION_PASSES
     InjectAMDGCNSharedMemTtrace
     AMDGCNNumCacheLines
     AMDGCNMemTrace
-    AMDGCNMemTraceHip
+    AMDGCNSubmitAddressMessages
     )
 
 set(InjectAMDGCNFunction_SOURCES
@@ -22,8 +22,8 @@ set(AMDGCNNumCacheLines_SOURCES
 set(AMDGCNMemTrace_SOURCES
 	AMDGCNMemTrace.cpp)
 
-set(AMDGCNMemTraceHip_SOURCES
-	AMDGCNMemTraceHip.cpp)
+set(AMDGCNSubmitAddressMessages_SOURCES
+	AMDGCNSubmitAddressMessages.cpp)
 
 set(AMDGCN_INSTRUMENTATION_PLUGINS "")
 
