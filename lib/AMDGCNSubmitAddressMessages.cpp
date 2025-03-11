@@ -83,13 +83,14 @@ void InjectInstrumentationFunction(const BasicBlock::iterator &I,
 
   DILocation *DL = dyn_cast<Instruction>(I)->getDebugLoc();
 
-  std::string dbgFile = getFullPath(DL);
+  std::string dbgFile =
+      DL != nullptr ? getFullPath(DL) : "<unknown source file>";
   size_t dbgFileHash = std::hash<std::string>{}(dbgFile);
 
   Value *Addr = LSI->getPointerOperand();
   Value *DbgFileHashVal = Builder.getInt64(dbgFileHash);
-  Value *DbgLineVal = Builder.getInt32(DL->getLine());
-  Value *DbgColumnVal = Builder.getInt32(DL->getColumn());
+  Value *DbgLineVal = Builder.getInt32(DL != nullptr ? DL->getLine() : 0);
+  Value *DbgColumnVal = Builder.getInt32(DL != nullptr ? DL->getColumn() : 0);
   Value *Op = LSI->getPointerOperand()->stripPointerCasts();
   uint32_t AddrSpace = cast<PointerType>(Op->getType())->getAddressSpace();
   Value *AddrSpaceVal = Builder.getInt8(AddrSpace);
@@ -97,7 +98,8 @@ void InjectInstrumentationFunction(const BasicBlock::iterator &I,
   Value *PointeeTypeSizeVal = Builder.getInt16(PointeeTypeSize);
 
   std::string SourceInfo = (F.getName() + "     " + dbgFile + ":" +
-                            Twine(DL->getLine()) + ":" + Twine(DL->getColumn()))
+                            Twine(DL != nullptr ? DL->getLine() : 0) + ":" +
+                            Twine(DL != nullptr ? DL->getColumn() : 0))
                                .str();
 
   // v_submit_message expects addresses (passed in Addr) to be 64-bits. However,
