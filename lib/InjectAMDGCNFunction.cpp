@@ -25,8 +25,13 @@ bool InjectAMDGCNFunc::runOnModule(Module &M) {
 
       // Get an IR builder. Sets the insertion point to the top of the function
       IRBuilder<> Builder(&*F.getEntryBlock().getFirstInsertionPt());
+#if LLVM_VERSION_MAJOR >= 19
+      Function *WorkItemXIDIntrinsicFunc = Intrinsic::getOrInsertDeclaration(
+          F.getParent(), Intrinsic::amdgcn_workitem_id_x);
+#else
       Function *WorkItemXIDIntrinsicFunc = Intrinsic::getDeclaration(
           F.getParent(), Intrinsic::amdgcn_workitem_id_x);
+#endif
 
       Value *WorkItemXValue = Builder.CreateCall(WorkItemXIDIntrinsicFunc, {});
       Builder.CreateCall(InjectedFunction, {WorkItemXValue});
