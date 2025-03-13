@@ -17,12 +17,14 @@
 #include <iostream>
 #include <vector>
 
+#include "llvm/ADT/StringRef.h"
 #include "llvm/Bitcode/BitcodeReader.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include <cstdlib>
 #include <dlfcn.h>
 #include <limits.h>
-#include <llvm/Support/FileSystem.h>
+#include <type_traits>
 #include <unistd.h>
 
 using namespace llvm;
@@ -177,7 +179,18 @@ bool AMDGCNMemTraceHip::runOnModule(Module &M) {
   std::unique_ptr<llvm::Module> DeviceModule =
       std::move(DeviceModuleOrErr.get());
 
-  if (M.getTargetTriple() == "amdgcn-amd-amdhsa") {
+  auto TargetTriple = M.getTargetTriple();
+
+  // Use std::string comparison if needed, otherwise call str()
+  std::string TripleStr = [](const auto &T) -> std::string {
+    if constexpr (std::is_same_v<std::decay_t<decltype(T)>, std::string>) {
+      return T; // Already a std::string
+    } else {
+      return T.str(); // Convert llvm::Triple to std::string
+    }
+  }(TargetTriple);
+
+  if (TripleStr == "amdgcn-amd-amdhsa") {
     errs() << "Linking device module from " << BitcodePath
            << " into GPU module\n";
     if (llvm::Linker::linkModules(M, std::move(DeviceModule))) {
