@@ -2,17 +2,12 @@
 #include "utils.h"
 
 #include "llvm/Bitcode/BitcodeWriter.h"
-#include "llvm/Demangle/Demangle.h"
-#include "llvm/Demangle/ItaniumDemangle.h"
 #include "llvm/IR/IRBuilder.h"
-#include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/IntrinsicsAMDGPU.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Passes/PassPlugin.h"
-#include "llvm/Support/Allocator.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include <iostream>
 #include <vector>
