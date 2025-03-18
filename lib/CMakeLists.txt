@@ -27,50 +27,44 @@ set(AMDGCNSubmitAddressMessages_SOURCES
 
 set(AMDGCN_INSTRUMENTATION_PLUGINS "")
 
-function(link_against_llvm llvm_version)
-  string(TOLOWER ${llvm_version} install_suffix)
-  foreach( plugin ${AMDGCN_INSTRUMENTATION_PASSES} )
-    add_library(
-      ${plugin}-${install_suffix}
-      SHARED
-      ${${plugin}_SOURCES}
-    )
-
-    target_include_directories(
-      ${plugin}-${install_suffix}
-      BEFORE
-      PRIVATE
-      "${CMAKE_CURRENT_SOURCE_DIR}/../include"
-      ${LLVM_INCLUDE_DIRS_${llvm_version}}
-    )
-
-    if(${llvm_version} STREQUAL "TRITON")
-      target_link_directories(
-        ${plugin}-${install_suffix}
-        PRIVATE
-        ${LLVM_LIBRARY_DIRS_${llvm_version}}
-      )  
-
-      target_link_libraries(
-        ${plugin}-${install_suffix}
-        PRIVATE
-        LLVMCore
-        LLVMIRReader
-        LLVMLinker
-        "$<$<PLATFORM_ID:Darwin>:-undefined dynamic_lookup>"
-      )
-    endif()
-
-
-    list(APPEND AMDGCN_INSTRUMENTATION_PLUGINS ${plugin}-${install_suffix})
-  endforeach()
-endfunction()
-
-link_against_llvm("ROCM")
-if(TRITON_LLVM)
-  link_against_llvm("TRITON")
-else()
-  message(STATUS "Skipping Triton instrumentation setup. No TRITON_LLVM detected")
+set(install_suffix "rocm")
+if ("${LLVM_INSTALL_DIR}" MATCHES ".*triton.*")
+  set(install_suffix "triton")
 endif()
+
+
+foreach( plugin ${AMDGCN_INSTRUMENTATION_PASSES} )
+  add_library(
+    ${plugin}-${install_suffix}
+    SHARED
+    ${${plugin}_SOURCES}
+  )
+
+  target_include_directories(
+    ${plugin}-${install_suffix}
+    BEFORE
+    PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/../include"
+  )
+
+ 
+  if (${install_suffix} STREQUAL "triton")
+    # target_link_directories(
+    #   ${plugin}-${install_suffix}
+    #   PRIVATE
+    #   ${LLVM_LIBRARY_DIRS_${llvm_version}}
+    # )  
+
+    target_link_libraries(
+      ${plugin}-${install_suffix}
+      PRIVATE
+      LLVMCore
+      LLVMIRReader
+      LLVMLinker
+      "$<$<PLATFORM_ID:Darwin>:-undefined dynamic_lookup>"
+    )
+  endif()
+endforeach()
+
 
 set(AMDGCN_INSTRUMENTATION_PLUGINS "${AMDGCN_INSTRUMENTATION_PLUGINS}" PARENT_SCOPE)

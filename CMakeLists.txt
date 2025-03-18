@@ -15,66 +15,55 @@ set(CMAKE_CXX_COMPILER
 set(CMAKE_C_COMPILER
   "${ROCM_PATH}/llvm/bin/clang")
 
-# Define supported LLVM versions
-set(TRITON_LLVM "" CACHE PATH "Path to the Triton LLVM directory")
-set(ROCM_LLVM "${ROCM_PATH}/llvm" CACHE PATH "Path to the ROCm LLVM directory")
+# If LLVM_INSTALL_DIR isnt defined use rocm llvm
+if(NOT DEFINED LLVM_INSTALL_DIR)
+  set(LLVM_INSTALL_DIR "${ROCM_PATH}/llvm")
+endif()
 
-function(find_and_configure_llvm llvm_install_dir llvm_version)
-  # Confirm that the LLVM installation directory exists
-  set(LLVM_INCLUDE_DIR "${llvm_install_dir}/include/llvm")
-  if(NOT EXISTS "${LLVM_INCLUDE_DIR}")
+
+# Confirm that the LLVM installation directory exists
+set(LLVM_INCLUDE_DIR "${LLVM_INSTALL_DIR}/include/llvm")
+if(NOT EXISTS "${LLVM_INCLUDE_DIR}")
+message(FATAL_ERROR
+  " LLVM_INSTALL_DIR (${LLVM_INCLUDE_DIR}) is invalid.")
+endif()
+
+# Check that the LLVMConfig.cmake file exists
+set(- FALSE)
+
+# Ubuntu + Darwin
+if(EXISTS "${LLVM_INSTALL_DIR}/lib/cmake/llvm/LLVMConfig.cmake")
+  set(VALID_INSTALLATION TRUE)
+endif()
+# Fedora
+if(EXISTS "${LLVM_INSTALL_DIR}/lib64/cmake/llvm/LLVMConfig.cmake")
+  set(VALID_INSTALLATION TRUE)
+endif()
+if(NOT ${VALID_INSTALLATION})
   message(FATAL_ERROR
-    " llvm_install_dir (${LLVM_INCLUDE_DIR}) is invalid.")
-  endif()
-
-  # Check that the LLVMConfig.cmake file exists
-  set(- FALSE)
-
-  # Ubuntu + Darwin
-  if(EXISTS "${llvm_install_dir}/lib/cmake/llvm/LLVMConfig.cmake")
-    set(VALID_INSTALLATION TRUE)
-  endif()
-  # Fedora
-  if(EXISTS "${llvm_install_dir}/lib64/cmake/llvm/LLVMConfig.cmake")
-    set(VALID_INSTALLATION TRUE)
-  endif()
-  if(NOT ${VALID_INSTALLATION})
-    message(FATAL_ERROR
-      "LLVM installation directory, (${llvm_install_dir}), is invalid. Couldn't
-      find LLVMConfig.cmake.")
-  endif()
-
-  include("${llvm_install_dir}/lib/cmake/llvm/LLVMConfig.cmake")
-
-  if("${LLVM_VERSION_MAJOR}" VERSION_LESS 17)
-    message(FATAL_ERROR "Found LLVM ${LLVM_VERSION_MAJOR}, but need LLVM 17 or above")
-  endif()
-
-  message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION} in ${llvm_install_dir}")
-  message(STATUS "Using LLVMConfig.cmake in: ${llvm_install_dir}")
-  message("LLVM STATUS:
-    Definitions ${LLVM_DEFINITIONS}
-    Includes    ${LLVM_INCLUDE_DIRS}
-    Libraries   ${LLVM_LIBRARY_DIRS}
-    Targets     ${LLVM_TARGETS_TO_BUILD}"
-  )
-
-  # include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
-  # link_directories(${LLVM_LIBRARY_DIRS})
-  # add_definitions(${LLVM_DEFINITIONS})
-  set(LLVM_INCLUDE_DIRS_${llvm_version} ${LLVM_INCLUDE_DIRS} PARENT_SCOPE)
-  set(LLVM_LIBRARY_DIRS_${llvm_version} ${LLVM_LIBRARY_DIRS} PARENT_SCOPE)
-  set(LLVM_DEFINITIONS_${llvm_version} ${LLVM_DEFINITIONS} PARENT_SCOPE)
-
-
-endfunction()
+    "LLVM installation directory, (${LLVM_INSTALL_DIR}), is invalid. Couldn't
+    find LLVMConfig.cmake.")
+endif()
 
 list(APPEND CMAKE_PREFIX_PATH "${LLVM_INSTALL_DIR}/lib/cmake/llvm/")
+find_package(LLVM REQUIRED CONFIG)
 
-find_and_configure_llvm(${ROCM_LLVM} "ROCM")
-if(TRITON_LLVM)
-  find_and_configure_llvm(${TRITON_LLVM} "TRITON")
+if("${LLVM_VERSION_MAJOR}" VERSION_LESS 17)
+  message(FATAL_ERROR "Found LLVM ${LLVM_VERSION_MAJOR}, but need LLVM 17 or above")
 endif()
+
+message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION} in ${LLVM_INSTALL_DIR}")
+message(STATUS "Using LLVMConfig.cmake in: ${LLVM_INSTALL_DIR}")
+message("LLVM STATUS:
+  Definitions ${LLVM_DEFINITIONS}
+  Includes    ${LLVM_INCLUDE_DIRS}
+  Libraries   ${LLVM_LIBRARY_DIRS}
+  Targets     ${LLVM_TARGETS_TO_BUILD}"
+)
+
+include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
+link_directories(${LLVM_LIBRARY_DIRS})
+add_definitions(${LLVM_DEFINITIONS})
 
 set(CMAKE_CXX_STANDARD 17 CACHE STRING "")
 
