@@ -9,6 +9,12 @@ else()
 endif()
 message("ROCM_PATH: ${ROCM_PATH}")
 
+# Set compilers
+set(CMAKE_CXX_COMPILER
+  "${ROCM_PATH}/llvm/bin/clang++")
+set(CMAKE_C_COMPILER
+  "${ROCM_PATH}/llvm/bin/clang")
+
 # Define supported LLVM versions
 set(TRITON_LLVM "" CACHE PATH "Path to the Triton LLVM directory")
 set(ROCM_LLVM "${ROCM_PATH}/llvm" CACHE PATH "Path to the ROCm LLVM directory")
@@ -38,7 +44,6 @@ function(find_and_configure_llvm llvm_install_dir llvm_version)
       find LLVMConfig.cmake.")
   endif()
 
-  # find_package(LLVM CONFIG)
   include("${llvm_install_dir}/lib/cmake/llvm/LLVMConfig.cmake")
 
   if("${LLVM_VERSION_MAJOR}" VERSION_LESS 17)
@@ -64,9 +69,7 @@ function(find_and_configure_llvm llvm_install_dir llvm_version)
 
 endfunction()
 
-# TODO: CONFIRM THIS LINE
 list(APPEND CMAKE_PREFIX_PATH "${LLVM_INSTALL_DIR}/lib/cmake/llvm/")
-
 
 find_and_configure_llvm(${ROCM_LLVM} "ROCM")
 if(TRITON_LLVM)
@@ -126,7 +129,9 @@ if (${BUILD_TESTING})
 	add_subdirectory(tests)
 endif()
 
-# Installation
-install(TARGETS ${AMDGCN_INSTRUMENTATION_PLUGINS}
-        LIBRARY DESTINATION lib/${CMAKE_PROJECT_NAME}
-        PUBLIC_HEADER DESTINATION include/${CMAKE_PROJECT_NAME})
+install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/lib/
+  DESTINATION lib
+  USE_SOURCE_PERMISSIONS
+  FILES_MATCHING PATTERN "*.so"
+  PATTERN "CMakeFiles" EXCLUDE
+)
