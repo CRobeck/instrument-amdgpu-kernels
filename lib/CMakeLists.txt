@@ -38,6 +38,7 @@ function(link_against_llvm llvm_version)
 
     target_include_directories(
       ${plugin}-${install_suffix}
+      BEFORE
       PRIVATE
       "${CMAKE_CURRENT_SOURCE_DIR}/../include"
       ${LLVM_INCLUDE_DIRS_${llvm_version}}
