@@ -48,23 +48,17 @@ foreach( plugin ${AMDGCN_INSTRUMENTATION_PASSES} )
   )
 
  
-  if (${install_suffix} STREQUAL "triton")
-    # target_link_directories(
-    #   ${plugin}-${install_suffix}
-    #   PRIVATE
-    #   ${LLVM_LIBRARY_DIRS_${llvm_version}}
-    # )  
-
-    target_link_libraries(
-      ${plugin}-${install_suffix}
-      PRIVATE
-      LLVMCore
-      LLVMIRReader
-      LLVMLinker
-      "$<$<PLATFORM_ID:Darwin>:-undefined dynamic_lookup>"
-    )
-  endif()
-endforeach()
+#   if (${install_suffix} STREQUAL "triton")
+#     target_link_libraries(
+#       ${plugin}-${install_suffix}
+#       PRIVATE
+#       LLVMCore
+#       LLVMIRReader
+#       LLVMLinker
+#       "$<$<PLATFORM_ID:Darwin>:-undefined dynamic_lookup>"
+#     )
+#   endif()
+# endforeach()
 
 
 set(AMDGCN_INSTRUMENTATION_PLUGINS "${AMDGCN_INSTRUMENTATION_PLUGINS}" PARENT_SCOPE)

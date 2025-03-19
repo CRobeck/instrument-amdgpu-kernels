@@ -46,7 +46,7 @@ if(NOT ${VALID_INSTALLATION})
 endif()
 
 list(APPEND CMAKE_PREFIX_PATH "${LLVM_INSTALL_DIR}/lib/cmake/llvm/")
-find_package(LLVM REQUIRED CONFIG)
+find_package(LLVM)
 
 if("${LLVM_VERSION_MAJOR}" VERSION_LESS 17)
   message(FATAL_ERROR "Found LLVM ${LLVM_VERSION_MAJOR}, but need LLVM 17 or above")
