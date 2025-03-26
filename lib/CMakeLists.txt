@@ -58,7 +58,7 @@ foreach( plugin ${AMDGCN_INSTRUMENTATION_PASSES} )
 #       "$<$<PLATFORM_ID:Darwin>:-undefined dynamic_lookup>"
 #     )
 #   endif()
-# endforeach()
+endforeach()
 
 
 set(AMDGCN_INSTRUMENTATION_PLUGINS "${AMDGCN_INSTRUMENTATION_PLUGINS}" PARENT_SCOPE)
