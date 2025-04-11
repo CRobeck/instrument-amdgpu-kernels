@@ -25,7 +25,15 @@ bool InjectAMDGCNFunc::runOnModule(Module &M) {
 
       // Get an IR builder. Sets the insertion point to the top of the function
       IRBuilder<> Builder(&*F.getEntryBlock().getFirstInsertionPt());
-#if LLVM_VERSION_MAJOR >= 19
+#if LLVM_VERSION_MAJOR >= 20
+      Function *WorkItemXIDIntrinsicFunc = cast<Function>(
+          M.getOrInsertFunction(
+               Intrinsic::getName(Intrinsic::amdgcn_workitem_id_x,
+                                  {Type::getInt32Ty(CTX)}, &M),
+               FunctionType::get(Type::getInt32Ty(CTX), false))
+              .getCallee());
+
+#elif LLVM_VERSION_MAJOR == 19
       Function *WorkItemXIDIntrinsicFunc = Intrinsic::getOrInsertDeclaration(
           F.getParent(), Intrinsic::amdgcn_workitem_id_x);
 #else
@@ -48,7 +56,7 @@ bool InjectAMDGCNFunc::runOnModule(Module &M) {
 PassPluginLibraryInfo getPassPluginInfo() {
   const auto callback = [](PassBuilder &PB) {
     PB.registerPipelineEarlySimplificationEPCallback(
-        [&](ModulePassManager &MPM, auto&&... args) {
+        [&](ModulePassManager &MPM, auto &&...args) {
           MPM.addPass(InjectAMDGCNFunc());
           return true;
         });

@@ -1,4 +1,4 @@
-#include "AMDGCNMemTraceHip.h"
+#include "AMDGCNSubmitAddressMessage.h"
 #include "utils.h"
 
 #include "llvm/Bitcode/BitcodeWriter.h"
@@ -140,10 +140,15 @@ std::string getPluginDirectory() {
     return "";
   }
 
+  errs() << "Plugin path: " << PluginPath << "\n";
+
   return PluginPath.substr(0, LastSlash); // Extract directory
 }
 
-bool AMDGCNMemTraceHip::runOnModule(Module &M) {
+bool AMDGCNSubmitAddressMessage::runOnModule(Module &M) {
+  errs() << "Running AMDGCNSubmitAddressMessage on module: " << M.getName()
+         << "\n";
+
   std::string PluginDir = getPluginDirectory();
   if (PluginDir.empty()) {
     errs() << "Error: Could not determine plugin directory!\n";
@@ -252,6 +257,8 @@ bool AMDGCNMemTraceHip::runOnModule(Module &M) {
       }
     }
   }
+  errs() << "Done running AMDGCNSubmitAddressMessage on module: " << M.getName()
+         << "\n";
   return ModifiedCodeGen;
 }
 
@@ -259,15 +266,19 @@ PassPluginLibraryInfo getPassPluginInfo() {
   const auto callback = [](PassBuilder &PB) {
     PB.registerOptimizerLastEPCallback(
         [&](ModulePassManager &MPM, auto &&...args) {
-          MPM.addPass(AMDGCNMemTraceHip());
+          MPM.addPass(AMDGCNSubmitAddressMessage());
           return true;
         });
   };
 
-  return {LLVM_PLUGIN_API_VERSION, "amdgcn-mem-trace-hip", LLVM_VERSION_STRING,
-          callback};
+  return {LLVM_PLUGIN_API_VERSION, "amdgcn-submit-address-message",
+          LLVM_VERSION_STRING, callback};
 };
 
-extern "C" LLVM_ATTRIBUTE_WEAK PassPluginLibraryInfo llvmGetPassPluginInfo() {
+extern "C"
+    //    __attribute__((visibility("default"))) PassPluginLibraryInfo extern
+    //    "C"
+    LLVM_ATTRIBUTE_WEAK PassPluginLibraryInfo
+    llvmGetPassPluginInfo() {
   return getPassPluginInfo();
 }
