@@ -126,37 +126,44 @@ void InjectInstrumentationFunction(const BasicBlock::iterator &I,
   LocationCounter++;
 }
 
-std::string getPluginDirectory() {
+std::string getBitcodePath() {
   Dl_info dl_info;
-  if (dladdr(reinterpret_cast<void *>(&getPluginDirectory), &dl_info) == 0) {
-    errs() << "Error: Could not determine plugin directory!\n";
+  if (dladdr(reinterpret_cast<void *>(&getBitcodePath), &dl_info) == 0) {
+    errs() << "Error: Could not determine IR pass plugin path!\n";
     return "";
   }
 
   std::string PluginPath = dl_info.dli_fname;
   size_t LastSlash = PluginPath.find_last_of('/');
   if (LastSlash == std::string::npos) {
-    errs() << "Error: Plugin path invalid!\n";
+    errs() << "Error: IR pass plugin path invalid!\n";
     return "";
   }
 
-  errs() << "Plugin path: " << PluginPath << "\n";
+  errs() << "IR pass plugin path: " << PluginPath << "\n";
 
-  return PluginPath.substr(0, LastSlash); // Extract directory
+  std::string PluginDir = PluginPath.substr(0, LastSlash); // Extract directory
+  if (PluginDir.empty()) {
+    errs() << "Error: Could not determine plugin directory!\n";
+    return "";
+  }
+  if (PluginPath.find("/lib/") != std::string::npos) {
+    PluginDir = PluginDir.substr(0, PluginDir.find("/lib/"));
+  }
+
+  std::string CodeObjectVersion =
+      (PluginPath.find("triton") != std::string::npos) ? "co4" : "co5";
+  std::string BitcodePath =
+      PluginDir + "/dh_comms_dev_" + CodeObjectVersion + ".bc";
+
+  return BitcodePath;
 }
 
 bool AMDGCNSubmitAddressMessage::runOnModule(Module &M) {
   errs() << "Running AMDGCNSubmitAddressMessage on module: " << M.getName()
          << "\n";
 
-  std::string PluginDir = getPluginDirectory();
-  if (PluginDir.empty()) {
-    errs() << "Error: Could not determine plugin directory!\n";
-    return false;
-  }
-
-  std::string BitcodePath =
-      PluginDir + "/dh_comms_dev.bc"; // Construct full path
+  std::string BitcodePath = getBitcodePath();
 
   if (!llvm::sys::fs::exists(BitcodePath)) {
     errs() << "Error: Bitcode file not found at " << BitcodePath << "\n";
