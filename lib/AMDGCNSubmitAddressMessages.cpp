@@ -162,6 +162,23 @@ std::string getBitcodePath() {
 bool AMDGCNSubmitAddressMessage::runOnModule(Module &M) {
   errs() << "Running AMDGCNSubmitAddressMessage on module: " << M.getName()
          << "\n";
+  auto TargetTriple = M.getTargetTriple();
+
+  // Use std::string comparison if needed, otherwise call str()
+  std::string TripleStr = [](const auto &T) -> std::string {
+    if constexpr (std::is_same_v<std::decay_t<decltype(T)>, std::string>) {
+      return T; // Already a std::string
+    } else {
+      return T.str(); // Convert llvm::Triple to std::string
+    }
+  }(TargetTriple);
+
+  if (TripleStr == "amdgcn-amd-amdhsa") {
+    errs() << "device function module found for " << TripleStr << "\n";
+  } else { // Not an AMDGPU target
+    errs() << TripleStr << ": Not an AMDGPU target, skipping pass.\n";
+    return false;
+  }
 
   std::string BitcodePath = getBitcodePath();
 
@@ -186,25 +203,12 @@ bool AMDGCNSubmitAddressMessage::runOnModule(Module &M) {
   std::unique_ptr<llvm::Module> DeviceModule =
       std::move(DeviceModuleOrErr.get());
 
-  auto TargetTriple = M.getTargetTriple();
-
-  // Use std::string comparison if needed, otherwise call str()
-  std::string TripleStr = [](const auto &T) -> std::string {
-    if constexpr (std::is_same_v<std::decay_t<decltype(T)>, std::string>) {
-      return T; // Already a std::string
-    } else {
-      return T.str(); // Convert llvm::Triple to std::string
-    }
-  }(TargetTriple);
-
-  if (TripleStr == "amdgcn-amd-amdhsa") {
-    errs() << "Linking device module from " << BitcodePath
-           << " into GPU module\n";
-    if (llvm::Linker::linkModules(M, std::move(DeviceModule))) {
-      errs()
-          << "Error linking device function module into instrumented module!\n";
-      return false;
-    }
+  errs() << "Linking device module from " << BitcodePath
+         << " into GPU module\n";
+  if (llvm::Linker::linkModules(M, std::move(DeviceModule))) {
+    errs() << "Error linking device function module into instrumented "
+              "module!\n";
+    return false;
   }
 
   // Now v_submit_address should be available inside M
