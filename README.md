@@ -1,3 +1,7 @@
+> [!IMPORTANT]  
+This project is in the process of being productized and incorporated into the AMD GPU performance analysis tools. For future developments see:
+https://github.com/AMDResearch/omniprobe
+
 # LLVM/MLIR Based Instrumentation of AMDGPU Kernels
 
 The goal of this project is to develop a set of compiler based transformation passes to instrument AMD GPU kernels to get a variety of performance analysis and optimization related information. The passes and examples are developed to be used with the AMDGPU software stack HIP/Rocm, the AMDGPU LLVM backend.
